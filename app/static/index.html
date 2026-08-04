@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DataSearch Hardware — pressão geopolítica sobre preços</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">▚</span>
+      <div>
+        <h1>DataSearch Hardware</h1>
+        <p class="sub">Geopolítica → cadeia de suprimentos → preço de hardware no Brasil</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="refresh">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">carregando…</span>
+        <span class="countdown" id="countdown"></span>
+      </div>
+      <button id="refreshBtn" class="btn" title="Forçar nova coleta">Atualizar agora</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="overview" role="tab">Visão Geral</button>
+    <button class="tab" data-tab="ranking" role="tab">Ranking</button>
+  </nav>
+
+  <main>
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Coletando dados públicos de BCB, IBGE, FRED, GDELT, Comex Stat e mercados…</p>
+      <p class="muted small">A primeira coleta pode levar até um minuto.</p>
+    </div>
+
+    <div id="error" class="error hidden"></div>
+
+    <!-- ============ VISÃO GERAL ============ -->
+    <section id="tab-overview" class="tabpanel">
+      <div class="hero">
+        <div class="gauge-card">
+          <svg id="gauge" viewBox="0 0 220 132" class="gauge"></svg>
+          <div class="gauge-meta">
+            <div class="gauge-value" id="iphValue">—</div>
+            <div class="gauge-label" id="iphLabel">Índice de Pressão de Hardware</div>
+            <div class="badge modeled">modelado</div>
+          </div>
+        </div>
+        <div class="kpis" id="kpis"></div>
+      </div>
+
+      <p class="interpretation" id="interpretation"></p>
+
+      <section class="block">
+        <div class="block-head">
+          <h2>Vetores de pressão</h2>
+          <p class="muted">Cada vetor é uma tese geopolítica traduzida em sinais mensuráveis.
+             A barra mostra a pressão de 0 a 100, onde 50 é neutro.</p>
+        </div>
+        <div class="drivers" id="drivers"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2>Camada Brasil</h2>
+          <p class="muted">O canal de transmissão local: câmbio, juro e inflação medida.
+             <span class="badge observed">observado</span></p>
+        </div>
+        <div class="two-col">
+          <div class="card chart-card">
+            <h3>Dólar PTAX <span class="src">BCB/SGS 1</span></h3>
+            <svg id="fxChart" viewBox="0 0 640 220" class="chart"></svg>
+          </div>
+          <div class="card chart-card">
+            <h3>IPCA mensal <span class="src">BCB/SGS 433</span></h3>
+            <svg id="ipcaChart" viewBox="0 0 640 220" class="chart"></svg>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2>IPCA de eletrônicos — o que já foi medido</h2>
+          <p class="muted">Variação acumulada em 12 meses por subitem oficial do IPCA (IBGE/SIDRA 7060).
+             <span class="badge observed">observado</span></p>
+        </div>
+        <div class="card">
+          <svg id="ipcaBars" viewBox="0 0 640 260" class="chart"></svg>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2>Manchetes que sustentam a leitura</h2>
+          <p class="muted">Coleta GDELT dos últimos 7 dias.</p>
+        </div>
+        <ul class="headlines" id="headlines"></ul>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2>Fontes e frescor do dado</h2>
+          <p class="muted">Toda métrica do painel rastreia até uma destas fontes.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="src-table">
+            <thead>
+              <tr><th>Fonte</th><th>Provedor</th><th>Referência</th><th>Status</th></tr>
+            </thead>
+            <tbody id="sources"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <!-- ============ RANKING ============ -->
+    <section id="tab-ranking" class="tabpanel hidden">
+      <div class="block-head">
+        <h2>Variação de preço por tipo de hardware</h2>
+        <p class="muted">
+          Ordenado pela projeção de 90 dias para o Brasil. As colunas separam o que é
+          <span class="badge modeled">modelado</span> do que é
+          <span class="badge observed">observado</span>.
+        </p>
+      </div>
+
+      <div class="legend">
+        <div><strong>Projeção global</strong> — pressão modelada sobre o preço em dólar, sem a camada local.</div>
+        <div><strong>Projeção Brasil</strong> — a mesma pressão composta com o câmbio e seu repasse.</div>
+        <div><strong>IPCA 12m</strong> — variação já medida pelo IBGE no subitem correspondente.</div>
+        <div><strong>US$/kg importado</strong> — valor unitário real de importação (Comex Stat/MDIC).</div>
+      </div>
+
+      <div class="ranking" id="ranking"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p id="disclaimer" class="disclaimer"></p>
+    <p class="muted small">
+      Atualização automática a cada 15 minutos ·
+      <a href="/docs">API</a> ·
+      <a href="/api/methodology">metodologia</a> ·
+      <a href="/api/health">saúde</a>
+    </p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
