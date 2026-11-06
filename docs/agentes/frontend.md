@@ -330,3 +330,106 @@ passaram e 10 falharam, as mesmas de antes, fora da tela.
 ## T35d — tier.models[] (2026-11-06)
 - prices.js: quando tier.models[] existe, a faixa lista "Modelos (n)". Cada modelo mostra marca e nome, a mediana do preço cheio, o selo sem preço/sem dados e até 3 anúncios de referência, ligados pelo model_key em offers[], onde a url já vem pronta. Sem models[], a faixa volta à lista plana de anúncios.
 - Testes: node --check ok; pytest 335 passaram e 10 falharam, as mesmas falhas de antes, fora do frontend.
+
+## T35e — range_brl null (2026-11-06)
+- Sem mudança. rangeText(null) devolve '' e tierHtml só mostra a faixa quando há texto; um nível sem preço já some sem faixa. Testes: node --check ok; pytest 335 passaram e 10 falharam, as mesmas falhas de antes. A suíte levou 8 min e meio nesta rodada.
+
+## Remoção da "conta antiga" nos gráficos (2026-11-06, pedido do usuário)
+- app.js, charts.js e dashboard.js: os pontos antes de model_since não são mais desenhados. Saíram a série "Fila (conta antiga)", o trecho pontilhado da Evolução, a nota "conta antiga" e o rótulo no tooltip. O filtro está em currentPoints(), em app.js e em dashboard.js. A API e o banco não mudaram.
+
+## Junção Gráficos + Evolução em Plotly (2026-11-06, pedido do usuário)
+- index.html: a aba Evolução saiu, e a aba Gráficos ficou com, em ordem:
+  - um período só (#trendRanges, com Tudo);
+  - os KPIs;
+  - "A pressão ao longo do tempo", agora #trendChart, com seletor de indicadores e legenda;
+  - "Evolução por produto", agora #trendCatChart, com Brasil, global e as barras de IPCA;
+  - a fila com o investimento em IA;
+  - o ranking, as bolhas e o radar.
+  O charts.js deixou de ser carregado.
+- Removidos dashIndex, dashCategory, dashCategoryChart, dashCategorySrc, dashRanges, trendTip, trendCatTip e trendCatLegend, porque eram duplicados ou ficaram sem uso.
+- dashboard.js: Dash.drawTrend(id, cfg) desenha a evolução em Plotly, com quebra em lacuna e trecho recalculado tracejado, e Dash.setRange(range) recebe o período do app. Um clique em barra ou bolha dispara o evento 'dash:category'.
+- app.js: o estado e os textos da evolução continuam aqui. O alias tendencia→dashboard mantém os links antigos, e o hash #dashboard?range=&series=&cat= guarda o estado.
+- O charts.js ficou no disco sem uso, porque test_ui_contract.py lê o arquivo. Ele pode ser apagado quando os testes forem ajustados.
+
+## Painel-resumo acima do seletor de período (2026-11-06, Coordenador)
+- A aba Gráficos ficou dividida em duas partes:
+  - Acima do seletor: os KPIs, o ranking de 30 dias e as bolhas. Os KPIs agora vêm só do snapshot (summary.iph, iph_brazil e iph_label); saíram os deltas "no período", que dependiam do histórico.
+  - Abaixo do título "Ao longo do tempo", o #trendRanges e só os gráficos que ele altera: a evolução, o produto, a fila e o radar.
+- Testes: 6 testes de test_ui_contract.py ainda exigem a estrutura antiga. São eles: aba_tendencia, charts_js_carrega, drill_down tendencia, visao_geral data-goto=tendencia, dashboard seis gráficos e textos catSvg._trend. As outras 10 falhas são as mesmas de antes.
+
+## Produto e fila na aba Gráficos (2026-11-06, Coordenador, aprovado pelo usuário)
+- Produto: o título passou a ser "Para onde a nossa estimativa de preço aponta nos próximos 30 dias".
+  - O gráfico mostra só as duas estimativas, global e Brasil, com a linha de zero marcada "estável" (opção zeroLabel do drawTrend).
+  - As barras do IBGE saíram do eixo. Em #trendCatIpca aparece "IBGE, último mês: X%, mês AAAA-MM", buscado com range=all.
+  - O eixo x usa só a janela das estimativas.
+- Fila: a linha de 50 ficou marcada "neutro". A faixa acima, sombreada, diz "consumidor perdendo espaço para a IA"; a de baixo, "sobrando capacidade". Entrou a frase fixa pedida.
+- Testes: node --check ok; pytest 329 passaram e 16 falharam (as 10 de antes e os 6 de test_ui_contract já relatados).
+
+## T36 — abas reorganizadas e cards Micron/NVIDIA fora (2026-11-06)
+- index.html: a ordem das abas passou a ser Visão Geral · Detalhes · Preços · Gráficos · Técnico.
+  - A aba Fila saiu da barra. Gráficos ganhou as sub-abas .seg.chart-views "Geral | Consumidor vs IA" (#cv-geral, #cv-fila), no mesmo padrão de Preços.
+  - O conteúdo inteiro de #tab-fila foi para #cv-fila.
+- app.js:
+  - chartView/CHART_VIEWS, setChartView e applyChartParams controlam a sub-aba; o hash fica #dashboard?view=fila. O link antigo #fila abre Gráficos já em Consumidor vs IA.
+  - Ao voltar para Geral, Dash.activate() refaz a medida dos gráficos Plotly.
+  - "Ver a evolução" e o drill-down de sinal abrem Geral.
+- FRONT_CARDS ficou só com "Demanda (capex + TSMC)", e isso vale para a Visão Geral e para Consumidor vs IA.
+- editorial.css: .chart-views reaproveita o estilo de .price-views.
+- Testes: só test_ui_contract.py, a pedido; 26 passaram e falharam os mesmos 6 de antes, que não foram corrigidos. O README fica com o Coordenador.
+- Atenção: a pendência anterior já está nos arquivos, embora o comando tenha aparecido como recusado. São três mudanças: a regra de 1200 px em editorial.css, o redimensionamento via matchMedia em dashboard.js e o texto "clique numa barra" em index.html e app.js. O usuário vai decidir se fica ou se é revertida.
+
+## T37 — seção "Consumidor vs Datacenter" no lugar da sub-aba (2026-11-06)
+- index.html:
+  - As sub-abas de Gráficos saíram.
+  - A seção #consumidorDatacenter, com o subtítulo pedido, fica abaixo de radar + ranking e acima de "Ao longo do tempo". Ela tem lado a lado #capexChart e #inventoryChart, os SVG da antiga Fila.
+  - O resto da antiga Fila saiu: medidor, KPIs, nota, Comtrade, explicação em passos e o card Demanda dali.
+- app.js:
+  - renderQueue só desenha os dois gráficos.
+  - Saíram chartView e setChartView. #fila e #dashboard?view=fila abrem Gráficos e rolam até a seção (scrollToSupply).
+- editorial.css: estilo .dash-supply; .chart-views saiu.
+- Conferido e completo: a regra de 1200 px (.dash-now em uma coluna abaixo disso), o matchMedia que chama resizeVisible() no dashboard.js e o texto "clique numa barra" em index.html e app.js. Ficou mantido, como pedido.
+- Testes: test_ui_contract.py com 26 passando e os mesmos 6 falhando. A pendência registrada na T36 está resolvida.
+
+## T38 — limpeza de Detalhes, rolagem e fim da aba Técnico (2026-11-06)
+- Detalhes: a seção "O efeito no Brasil" (#fxChart e #ipcaChart) saiu, junto com o código que desenhava esses gráficos e a função barChart, que só eles usavam. O dólar continua na Visão Geral.
+- Preços: o id "ranking" virou "priceRanking", e o hash #ranking não rola mais a página. Nenhum outro hash de aba (visao-geral, overview, dashboard, fila, tecnico) coincide com um id.
+- Rolagem: clicar numa aba ou num botão data-goto volta ao topo com window.scrollTo(0, 0). #fila continua rolando até #consumidorDatacenter.
+- Técnico:
+  - Saíram o botão, #tab-tecnico, o JS de #interpretation e #sources e os dois links data-goto="tecnico" da Visão Geral.
+  - O alias tecnico→visao-geral cobre o hash antigo.
+  - CSS removido (só a Técnico usava): .tech-*, .interpretation, .table-wrap, .glossary-link e .linkbtn. As regras globais de table/th/td ficaram, porque a .detail-table usa.
+  - Ordem das abas: Visão Geral · Detalhes · Preços · Gráficos.
+- Testes: test_ui_contract.py com 25 passando e 7 falhando. São os 6 de antes e mais test_aba_tecnico_concentra_metodologia_fontes_e_limites, que espera a aba removida.
+
+## T39 — aba Fontes (2026-11-06)
+- index.html: nova aba "Fontes" no fim (#tab-fontes; ordem Visão Geral · Detalhes · Preços · Gráficos · Fontes).
+  - No topo, o texto "Todas as fontes são públicas e nenhuma exige cadastro ou chave."
+  - No fim, uma nota em texto sobre o docs/fontes.md, sem link.
+  - O hash #fontes não coincide com nenhum id.
+- app.js: renderSources(d), chamado em render(), agrupa snap.sources por provedor. Cada fonte mostra:
+  - o nome com link, via safeUrl e com target=_blank e rel=noopener;
+  - o selo (ok, desatualizada, indisponível ou desligada), por allowlist SOURCE_STATUS;
+  - a data de referência, a última coleta e a nota.
+  Todo texto dinâmico passa por esc().
+- editorial.css: .src-*. É uma lista com flex-wrap e overflow-wrap:anywhere, não uma tabela, para não ter rolagem lateral no celular.
+- Testes: test_ui_contract.py com 25 passando e os mesmos 7 falhando de antes.
+
+## T40 — medidor e termômetro trocados (2026-11-06)
+- Visão Geral: o .simple-thermo deu lugar ao medidor semicircular (#simpleGauge, com #simpleScore, #simpleScoreLabel = iph_label e o selo "estimativa nossa"). O rodapé #simpleBrazil e o código que o montava saíram.
+- Detalhes: o medidor deu lugar ao termômetro .simple-thermo.detail-thermo (#iphValue, "Pressão sobre o preço (0 a 100)", #iphMarker e as legendas), sem rodapé. O KPI "Dados disponíveis" saiu.
+- Os ids são únicos em cada aba; renderGauge e as classes CSS são compartilhados.
+- CSS: regras .simple-gauge e .detail-thermo, com versão para celular; as regras .simple-br saíram.
+- Testes: test_ui_contract.py com 25 passando e os mesmos 7 falhando.
+
+## T41 — "estimativa nossa" → "estimativa" (2026-11-06)
+- index.html: 6 ocorrências trocadas, mantendo a maiúscula ("Estimativa:" no glossário). As frases continuam fazendo sentido, como "A nota é uma estimativa." e "estimativa é o que o modelo calcula". O JS não tinha nenhuma ocorrência.
+- app/services/collector.py:45 ficou de fora porque não é da área do Frontend. O pedido foi para o Coordenador repassar ao dono.
+- Testes: test_ui_contract.py com 24 passando e 8 falhando. São os 7 de antes e mais test_entenda_usa_os_limiares_reais_e_nao_promete_queda, que exige "estimativa nossa" no HTML.
+
+## Ajustes diretos do Coordenador (06/11, após a T41)
+- Visão Geral: removido "Como ler em 30 segundos" (HTML + CSS); a nota de "não é recomendação" segue no rodapé.
+- Divisórias: uma linha única abaixo do hero e outra acima de "O que vale acompanhar"; sem linha vertical ao lado do medidor nem linha acima dele no celular.
+- Medidor da Visão Geral: coluna clamp(340px, 34vw, 380px); número em max(56px, 24cqi) (container query); até 900 px, máx. 380 px.
+- Visão Geral: itens de "O que mais pesa hoje" e "O que pode ficar mais caro" alinhados por subgrid (listas em display: contents); botões do hero presos à base (flex coluna, align-items: flex-start); botão "?"/glossário criado e removido a pedido.
+- Detalhes: divisória antes de cada bloco e entre as causas; sem linhas internas; espaçamento padronizado (40/24/20/12/10 px); linha vertical entre termômetro e KPIs; KPIs em grade fixa de 3 colunas (1 até 560 px) com selo abaixo do nome; textos de "O que está por trás do número" e de Notícias trocados; "Por que o dólar se mexeu" removido (fxExplanationHtml + CSS fx-*).
+- Gráficos: texto de abertura reduzido a "Veja como a pressão e os preços estimados mudaram com o tempo." (sem selos).

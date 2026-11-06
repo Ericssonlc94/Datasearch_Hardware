@@ -1210,3 +1210,26 @@ só nesta rodada.
   próximo é descer a RX 7600 (mediana de R$ 2.941, 3 anúncios da KaBuM!)
   para o baixo, mas isso desfaz a escada da T33 e deixa o médio sem AMD.
   Fica para decisão do usuário.
+
+## T35d — faixa exibida observada, GPU baixo nova e iPhone (06/11/2026): **feito, com pendências**
+
+- **Faixa exibida**: `range_brl` agora vai da menor à maior mediana dos modelos
+  com preço no dia (`observed_range`), e a média sempre fica dentro. Sem
+  modelo com preço, `range_brl` é `null`. A faixa fixa virou
+  `curation_range`, usada só na curadoria e no filtro do anúncio, e o
+  `validate_basket` não confere mais sobreposição.
+- **GPU baixo**: GTX 1650, RX 6500 XT, RTX 3050 e Arc A380. A RTX 3060 e a Arc
+  B570 subiram para o médio. Saíram a RX 6600 (só PC montado) e a RTX 4060,
+  para o médio ficar com 5 modelos.
+- **iPhone**: entrou o iPhone 16 de 128 GB no celular alto, no lugar do
+  iPhone 15 (que redirecionava). O nome do celular agora pode começar por
+  "iPhone". O preço é R$ 5.332,22 cheio, por marketplace (Magalu): a KaBuM!
+  não vende.
+- **Pedidos**: GPU com 1 robots + 3 buscas. A GTX 1650 redirecionou; a Arc A380
+  trouxe 6 itens, nenhum avulso. iPhone com 1 robots + 3 buscas
+  (`iphone-16-128gb` lido; `apple-iphone-16-128gb` igual; `iphone-17-128gb`
+  sem anúncio que case).
+- **Resultado**: 95 de 111 modelos com preço. A média do GPU baixo é
+  R$ 1.819,15 (RTX 3050 R$ 2.222,21 e RX 6500 XT R$ 1.416,10), na faixa
+  exibida de 1.416 a 2.222.
+- **Pendência**: GTX 1650 e Arc A380 sem preço.

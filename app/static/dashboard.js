@@ -1,11 +1,13 @@
 /* DataSearch Hardware — gráficos Plotly, carregados sob demanda.
    Nenhuma dependência de CDN: Plotly vem de /static/vendor. O arquivo só é
-   injetado quando a aba Gráficos é aberta pela primeira vez. */
+   injetado quando a aba Gráficos é aberta pela primeira vez. O resumo
+   (KPIs, radar e ranking) vem só do snapshot e não depende do período. A
+   evolução (séries escolhidas e produto) é desenhada aqui com dados e
+   estado do app.js. */
 
 (function () {
   'use strict';
 
-  const RANGES = ['24h', '7d', '30d', '90d', '1y'];
   const PLOTLY_URL = '/static/vendor/plotly-2.35.2.min.js';
   const COLOR = {
     blue: '#4f8cff',
@@ -21,16 +23,7 @@
   const DASH = {
     active: false,
     snapshot: null,
-    core: null,
-    driverHist: null,
-    catData: null,
-    catalog: null,
-    range: '24h',
-    category: null,
-    cache: new Map(),
     loading: null,
-    token: 0,
-    error: null,
   };
 
   const d$ = (id) => document.getElementById(id);
@@ -62,9 +55,11 @@
     return t.length > n ? `${t.slice(0, n - 1)}…` : t;
   };
 
-  function xTickFormat() {
-    return DASH.range === '24h' ? '%H:%M' : '%d/%m';
+  function xTickFormat(range) {
+    if (range === '24h') return '%H:%M';
+    return range === '1y' ? '%m/%y' : '%d/%m';
   }
+
 
   function axis(extra = {}) {
     return {
@@ -142,64 +137,6 @@
     return points && points.length < 3 ? 'lines+markers' : 'lines';
   }
 
-  function points(series) {
-    return (series && series.points) || [];
-  }
-
-  // Linha de uma série com `model_since`: o trecho antes do marco usa a conta
-  // antiga e vira uma linha própria, esmaecida e pontilhada (como a fila).
-  // Sem marco, devolve uma linha só, igual a antes.
-  function lineTraces(series, base) {
-    const all = points(series);
-    if (!all.length) return [];
-    const sinceMs = series && series.model_since ? Date.parse(series.model_since) : NaN;
-    const old = Number.isFinite(sinceMs) ? all.filter((p) => Date.parse(p.t) < sinceMs) : [];
-    const cur = Number.isFinite(sinceMs) ? all.filter((p) => Date.parse(p.t) >= sinceMs) : all;
-    const trace = (pts, extra) => ({
-      ...base,
-      x: pts.map((p) => p.t),
-      y: pts.map((p) => p.v),
-      type: 'scatter',
-      mode: modeFor(pts),
-      connectgaps: false,
-      ...extra,
-    });
-    const out = [];
-    if (old.length) {
-      const day = new Date(sinceMs).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      out.push(trace(old, {
-        name: `${base.name} (conta antiga, até ${day})`,
-        line: { ...base.line, width: 1.6, dash: 'dot' },
-        opacity: 0.45,
-        hovertemplate: (base.hovertemplate || '').replace('<extra>', '<extra>conta antiga · '),
-      }));
-    }
-    if (cur.length) out.push(trace(cur, {}));
-    return out;
-  }
-
-  function lastValue(series) {
-    const pts = points(series);
-    for (let i = pts.length - 1; i >= 0; i -= 1) {
-      if (pts[i].v !== null && pts[i].v !== undefined) return pts[i].v;
-    }
-    return null;
-  }
-
-  function firstValue(series) {
-    for (const p of points(series)) {
-      if (p.v !== null && p.v !== undefined) return p.v;
-    }
-    return null;
-  }
-
-  function delta(series) {
-    const first = firstValue(series);
-    const last = lastValue(series);
-    if (first === null || last === null) return null;
-    return last - first;
-  }
-
   function setStatus(text, cls = '') {
     const el = d$('dashStatus');
     if (!el) return;
@@ -223,81 +160,16 @@
     return DASH.loading;
   }
 
-  /* ---------------- dados ---------------- */
-
-  async function ensureCatalog() {
-    if (DASH.catalog) return;
-    const res = await fetch('/api/series');
-    if (!res.ok) throw new Error(`HTTP ${res.status} em /api/series`);
-    const data = await res.json();
-    DASH.catalog = new Set(
-      (data.groups || []).flatMap((g) => (g.series || []).map((s) => s.key)),
-    );
-  }
-
-  function seriesUrl(keys) {
-    return `/api/history?range=${encodeURIComponent(DASH.range)}&series=${encodeURIComponent(keys.join(','))}&bucket=auto`;
-  }
-
-  async function fetchHistory(keys) {
-    const valid = DASH.catalog ? keys.filter((k) => DASH.catalog.has(k)) : keys;
-    const cacheKey = `${DASH.range}|${valid.join(',')}`;
-    if (DASH.cache.has(cacheKey)) return DASH.cache.get(cacheKey);
-    const res = await fetch(seriesUrl(valid));
-    if (!res.ok) throw new Error(`HTTP ${res.status} em /api/history`);
-    const data = await res.json();
-    const map = Object.fromEntries((data.series || []).map((s) => [s.key, s]));
-    map.__meta = {
-      bucket_seconds: data.bucket_seconds,
-      from: data.from,
-      to: data.to,
-      interpolated: data.interpolated,
-    };
-    DASH.cache.set(cacheKey, map);
-    return map;
-  }
-
-  async function ensureData() {
-    await ensureCatalog();
-    const coreKeys = [
-      'iph', 'iph_br', 'coverage',
-      'supply.queue', 'supply.capex_ttm', 'supply.inventory_ratio', 'supply.diversion',
-    ];
-    const driverKeys = (DASH.snapshot.drivers || []).map((d) => `driver.${d.key}`);
-    const [core, driverHist] = await Promise.all([
-      fetchHistory(coreKeys),
-      fetchHistory(driverKeys),
-    ]);
-    DASH.core = core;
-    DASH.driverHist = driverHist;
-    if (!DASH.category) {
-      DASH.category = (DASH.snapshot.ranking[0] || {}).key || null;
-    }
-    await ensureCategory(DASH.category);
-  }
-
-  async function ensureCategory(key) {
-    if (!key) {
-      DASH.catData = null;
-      return;
-    }
-    const keys = [`cat.${key}.proj30_br`, `cat.${key}.proj30_global`];
-    const ipcaKey = `obs.${key}.ipca`;
-    if (!DASH.catalog || DASH.catalog.has(ipcaKey)) keys.push(ipcaKey);
-    DASH.catData = await fetchHistory(keys);
-    DASH.catData.__category = key;
-  }
-
   /* ---------------- render: KPIs ---------------- */
 
   function renderKpis() {
     const snap = DASH.snapshot;
     if (!snap) return;
-    const core = DASH.core || {};
-    const iph = lastValue(core.iph);
-    const iphBr = lastValue(core.iph_br);
-    const dIph = delta(core.iph);
-    const dBr = delta(core.iph_br);
+    // O painel-resumo fica acima do seletor de período e não depende dele:
+    // tudo aqui vem do snapshot, nada do histórico.
+    const sum = snap.summary || {};
+    const iph = sum.iph ?? null;
+    const iphBr = sum.iph_brazil ?? null;
     const supply = snap.supply || {};
     const top = (snap.ranking || [])[0];
     const ok = (snap.sources || []).filter((s) => s.status === 'ok').length;
@@ -314,14 +186,14 @@
       card(
         'Pressão agora',
         iph === null ? '—' : dNum(iph, 1),
-        `${dPct(dIph)} no período`,
+        dEsc(sum.iph_label || 'índice global'),
         iph === null ? null : dColor(iph),
         '<span class="badge modeled">estimativa</span>',
       ),
       card(
         'Pressão no Brasil',
         iphBr === null ? '—' : dNum(iphBr, 1),
-        `${dPct(dBr)} no período · dólar + impostos`,
+        'dólar + impostos',
         iphBr === null ? null : dColor(iphBr),
         '<span class="badge modeled">estimativa</span>',
       ),
@@ -356,110 +228,6 @@
   }
 
   /* ---------------- render: gráficos ---------------- */
-
-  function renderIndex() {
-    const core = DASH.core || {};
-    const iph = core.iph;
-    const iphBr = core.iph_br;
-    if (!points(iph).length && !points(iphBr).length) {
-      drawEmpty('dashIndex', 'O histórico começa no primeiro ciclo de coleta. Volte em alguns minutos.');
-      return;
-    }
-    const traces = [
-      ...lineTraces(iph, {
-        name: 'Pressão global',
-        line: { color: COLOR.blue, width: 2.4 },
-        hovertemplate: '%{y:.1f}<extra>Pressão global</extra>',
-      }),
-      ...lineTraces(iphBr, {
-        name: 'Pressão no Brasil',
-        line: { color: COLOR.orange, width: 2.4 },
-        hovertemplate: '%{y:.1f}<extra>Pressão no Brasil</extra>',
-      }),
-    ];
-    draw('dashIndex', traces, {
-      xaxis: { type: 'date', tickformat: xTickFormat(), hoverformat: '%d/%m/%Y %H:%M' },
-      yaxis: { range: [0, 100], title: { text: '0-100', font: { size: 10 } } },
-      shapes: [{
-        type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 50, y1: 50,
-        line: { color: '#475569', width: 1, dash: 'dot' },
-      }],
-    });
-  }
-
-  function renderSupply() {
-    const core = DASH.core || {};
-    const queue = core['supply.queue'];
-    const capex = core['supply.capex_ttm'];
-    if (!points(queue).length && !points(capex).length) {
-      drawEmpty('dashSupply', 'A fila é gravada a cada ciclo. Ainda não há histórico suficiente.');
-      return;
-    }
-    const traces = [];
-    // Antes de `model_since` a fila usava a conta antiga (presa em 100): os
-    // pontos ficam no gráfico, esmaecidos e pontilhados, numa série própria.
-    const sinceMs = queue && queue.model_since ? Date.parse(queue.model_since) : NaN;
-    const qAll = points(queue);
-    const qOld = Number.isFinite(sinceMs) ? qAll.filter((p) => Date.parse(p.t) < sinceMs) : [];
-    const qNew = Number.isFinite(sinceMs) ? qAll.filter((p) => Date.parse(p.t) >= sinceMs) : qAll;
-    if (qOld.length) {
-      const day = new Date(sinceMs).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      traces.push({
-        x: qOld.map((p) => p.t),
-        y: qOld.map((p) => p.v),
-        type: 'scatter',
-        mode: modeFor(qOld),
-        name: `Fila (conta antiga, até ${day})`,
-        line: { color: COLOR.green, width: 1.6, dash: 'dot' },
-        opacity: 0.45,
-        connectgaps: false,
-        hovertemplate: '%{y:.1f}<extra>Fila · conta antiga</extra>',
-      });
-    }
-    if (qNew.length) {
-      traces.push({
-        x: qNew.map((p) => p.t),
-        y: qNew.map((p) => p.v),
-        type: 'scatter',
-        mode: modeFor(qNew),
-        name: 'Fila do consumidor',
-        line: { color: COLOR.green, width: 2.6 },
-        connectgaps: false,
-        hovertemplate: '%{y:.1f}<extra>Fila</extra>',
-      });
-    }
-    if (points(capex).length) {
-      traces.push({
-        x: points(capex).map((p) => p.t),
-        y: points(capex).map((p) => p.v / 1e9),
-        type: 'scatter',
-        mode: modeFor(points(capex)),
-        name: 'Investimento em IA (US$ bi)',
-        yaxis: 'y2',
-        line: { color: COLOR.orange, width: 2 },
-        fill: 'tozeroy',
-        fillcolor: 'rgba(255,159,67,.08)',
-        connectgaps: false,
-        hovertemplate: 'US$ %{y:.1f} bi<extra>Investimento em IA</extra>',
-      });
-    }
-    draw('dashSupply', traces, {
-      xaxis: { type: 'date', tickformat: xTickFormat(), hoverformat: '%d/%m/%Y %H:%M' },
-      yaxis: { range: [0, 100], title: { text: 'fila', font: { size: 10 } } },
-      yaxis2: {
-        overlaying: 'y',
-        side: 'right',
-        showgrid: false,
-        zerolinecolor: COLOR.zero,
-        tickfont: { size: 10, color: '#64748b' },
-        title: { text: 'US$ bi', font: { size: 10 } },
-      },
-      shapes: [{
-        type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 50, y1: 50,
-        line: { color: '#475569', width: 1, dash: 'dot' },
-      }],
-    });
-  }
 
   function renderRanking() {
     const snap = DASH.snapshot;
@@ -508,67 +276,6 @@
     bindCategoryClick('dashRanking');
   }
 
-  function renderCategory() {
-    const data = DASH.catData;
-    const key = DASH.category;
-    const src = d$('dashCategorySrc');
-    if (!data || !key) {
-      if (src) src.textContent = '—';
-      drawEmpty('dashCategoryChart', 'Selecione um produto.');
-      return;
-    }
-    const item = (DASH.snapshot.ranking || []).find((i) => i.key === key);
-    if (src) src.textContent = item ? item.label : key;
-
-    const br = data[`cat.${key}.proj30_br`];
-    const global = data[`cat.${key}.proj30_global`];
-    const ipca = data[`obs.${key}.ipca`];
-    if (src && !points(ipca).length) {
-      src.textContent += ' · sem inflação no período';
-    }
-    if (!points(br).length && !points(global).length && !points(ipca).length) {
-      drawEmpty('dashCategoryChart', 'Ainda não há histórico deste produto.');
-      return;
-    }
-    const traces = [
-      ...lineTraces(br, {
-        name: 'Estimativa Brasil 30d',
-        line: { color: COLOR.orange, width: 2.4 },
-        hovertemplate: '%{y:+.2f}%<extra>Brasil 30d</extra>',
-      }),
-      ...lineTraces(global, {
-        name: 'Estimativa global 30d',
-        line: { color: COLOR.blue, width: 2, dash: 'dash' },
-        hovertemplate: '%{y:+.2f}%<extra>Global 30d</extra>',
-      }),
-    ];
-    if (points(ipca).length) {
-      traces.push({
-        x: points(ipca).map((p) => p.t),
-        y: points(ipca).map((p) => p.v),
-        type: 'bar',
-        name: 'Inflação mensal (oficial)',
-        yaxis: 'y2',
-        marker: { color: 'rgba(45,212,167,.45)' },
-        hovertemplate: '%{y:+.2f}%<extra>Inflação do mês</extra>',
-      });
-    }
-    draw('dashCategoryChart', traces, {
-      margin: { l: 52, r: 52, t: 30, b: 38 },
-      xaxis: { type: 'date', tickformat: xTickFormat(), hoverformat: '%d/%m/%Y %H:%M' },
-      yaxis: { title: { text: 'estimativa 30d (%)', font: { size: 10 } }, zerolinecolor: COLOR.zero },
-      yaxis2: {
-        overlaying: 'y',
-        side: 'right',
-        showgrid: false,
-        zerolinecolor: COLOR.zero,
-        tickfont: { size: 10, color: '#64748b' },
-        title: { text: 'inflação do mês (%)', font: { size: 10 } },
-      },
-      bargap: 0.55,
-    });
-  }
-
   function renderRadar() {
     const snap = DASH.snapshot;
     if (!snap || !(snap.drivers || []).length) {
@@ -578,8 +285,6 @@
     const drivers = snap.drivers;
     const labels = drivers.map((d) => short(d.label.split(':')[0].split('—')[0].trim(), 18));
     const now = drivers.map((d) => d.score);
-    const hist = DASH.driverHist || {};
-    const start = drivers.map((d) => firstValue(hist[`driver.${d.key}`]));
     const traces = [{
       type: 'scatterpolar',
       r: now,
@@ -590,18 +295,6 @@
       fillcolor: 'rgba(255,159,67,.12)',
       hovertemplate: '%{theta}: %{r:.0f}<extra>agora</extra>',
     }];
-    if (start.every((v) => v !== null && v !== undefined)) {
-      traces.push({
-        type: 'scatterpolar',
-        r: start,
-        theta: labels,
-        fill: 'toself',
-        name: 'início da janela',
-        line: { color: COLOR.blue, width: 1.8, dash: 'dot' },
-        fillcolor: 'rgba(79,140,255,.08)',
-        hovertemplate: '%{theta}: %{r:.0f}<extra>início</extra>',
-      });
-    }
     draw('dashRadar', traces, {
       polar: {
         bgcolor: 'rgba(0,0,0,0)',
@@ -613,60 +306,9 @@
         },
         angularaxis: { gridcolor: COLOR.grid, linecolor: COLOR.grid, tickfont: { size: 9.5, color: COLOR.txt } },
       },
-      showlegend: true,
+      showlegend: false,
       margin: { l: 30, r: 30, t: 20, b: 20 },
     });
-  }
-
-  function renderScatter() {
-    const snap = DASH.snapshot;
-    if (!snap || !(snap.ranking || []).length) {
-      drawEmpty('dashScatter', 'Lista de produtos indisponível.');
-      return;
-    }
-    const items = snap.ranking;
-    draw('dashScatter', [{
-      x: items.map((i) => i.pressure_score),
-      y: items.map((i) => i.projected_brazil_30d_pct),
-      text: items.map((i) => i.label),
-      customdata: items.map((i) => i.key),
-      type: 'scatter',
-      mode: 'markers+text',
-      textposition: 'top center',
-      textfont: { size: 8.5, color: COLOR.txt },
-      name: 'produtos',
-      marker: {
-        size: items.map((i) => 10 + i.pressure_score / 9),
-        color: items.map((i) => i.projected_brazil_30d_pct),
-        colorscale: [[0, COLOR.green], [0.5, COLOR.muted], [1, COLOR.red]],
-        cmin: -2,
-        cmax: 12,
-        showscale: true,
-        colorbar: {
-          title: { text: 'estimativa 30d', font: { size: 9 } },
-          thickness: 10,
-          tickfont: { size: 9, color: '#64748b' },
-          outlinewidth: 0,
-        },
-        line: { color: 'rgba(232,237,247,.25)', width: 1 },
-      },
-      hovertemplate: '<b>%{text}</b><br>pressão %{x:.0f}<br>Brasil %{y:+.1f}%<extra></extra>',
-    }], {
-      margin: { l: 52, r: 48, t: 16, b: 40 },
-      xaxis: { title: { text: 'pressão (0-100)', font: { size: 10 } }, range: [0, 100] },
-      yaxis: { title: { text: 'estimativa Brasil 30d (%)', font: { size: 10 } }, zerolinecolor: COLOR.zero },
-      shapes: [
-        {
-          type: 'line', xref: 'paper', x0: 0.5, x1: 0.5, y0: 0, y1: 1,
-          line: { color: '#475569', width: 1, dash: 'dot' },
-        },
-        {
-          type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0, y1: 0,
-          line: { color: '#475569', width: 1, dash: 'dot' },
-        },
-      ],
-    });
-    bindCategoryClick('dashScatter');
   }
 
   /* ---------------- interação ---------------- */
@@ -681,106 +323,33 @@
     });
   }
 
-  async function selectCategory(key) {
-    if (!key || key === DASH.category) return;
-    DASH.category = key;
-    const sel = d$('dashCategory');
-    if (sel) sel.value = key;
-    const token = ++DASH.token;
-    try {
-      await ensureCategory(key);
-      if (token !== DASH.token) return;
-      renderCategory();
-      setStatus(`detalhe: ${(DASH.snapshot.ranking.find((i) => i.key === key) || {}).label || key}`);
-    } catch (err) {
-      setStatus(`falha ao abrir o detalhe: ${err.message}`, 'err');
-    }
-  }
-
-  function bindRanges() {
-    const box = d$('dashRanges');
-    if (!box || box.dataset.bound === '1') return;
-    box.dataset.bound = '1';
-    box.addEventListener('click', (ev) => {
-      const btn = ev.target.closest('.seg-btn');
-      if (!btn) return;
-      DASH.range = btn.dataset.range;
-      box.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.range === DASH.range));
-      refresh();
-    });
-  }
-
-  function bindCategorySelect() {
-    const sel = d$('dashCategory');
-    if (!sel || sel.dataset.bound === '1') return;
-    sel.dataset.bound = '1';
-    sel.addEventListener('change', () => {
-      selectCategory(sel.value);
-    });
-  }
-
-  function fillCategorySelect() {
-    const sel = d$('dashCategory');
-    if (!sel || !DASH.snapshot) return;
-    const keys = DASH.snapshot.ranking.map((i) => i.key);
-    const sig = keys.join(',');
-    if (sel.dataset.signature !== sig) {
-      sel.innerHTML = DASH.snapshot.ranking.map(
-        (i) => `<option value="${dEsc(i.key)}">${dEsc(i.label)}</option>`,
-      ).join('');
-      sel.dataset.signature = sig;
-    }
-    if (!keys.includes(DASH.category)) DASH.category = keys[0] || null;
-    if (DASH.category) sel.value = DASH.category;
+  // O produto da evolução é estado do app.js: o clique só avisa.
+  function selectCategory(key) {
+    if (!key) return;
+    window.dispatchEvent(new CustomEvent('dash:category', { detail: { key } }));
   }
 
   /* ---------------- ciclo ---------------- */
 
-  async function refresh() {
-    if (!DASH.snapshot || !window.Plotly) return;
-    const token = ++DASH.token;
-    setStatus('carregando histórico…');
-    try {
-      await ensureData();
-      if (token !== DASH.token || !DASH.active) return;
-      renderKpis();
-      fillCategorySelect();
-      renderIndex();
-      renderSupply();
-      renderRanking();
-      renderCategory();
-      renderRadar();
-      renderScatter();
-      const meta = (DASH.core && DASH.core.__meta) || {};
-      const count = (DASH.core ? Object.keys(DASH.core).filter((k) => k !== '__meta').length : 0)
-        + (DASH.driverHist ? Object.keys(DASH.driverHist).filter((k) => k !== '__meta').length : 0);
-      const bucket = meta.bucket_seconds
-        ? `média a cada ${meta.bucket_seconds >= 86400
-          ? `${Math.round(meta.bucket_seconds / 86400)}d`
-          : meta.bucket_seconds >= 3600
-            ? `${Math.round(meta.bucket_seconds / 3600)}h`
-            : `${Math.round(meta.bucket_seconds / 60)}min`}`
-        : 'média automática';
-      setStatus(`período ${DASH.range} · ${bucket} · ${count} indicadores · sem inventar dados`);
-      const note = d$('dashNote');
-      if (note) {
-        note.textContent =
-          'Os gráficos usam os dados da última coleta. Quando falta um dado, a linha ' +
-          'quebra; não preenchemos o buraco com zero.';
-      }
-      bindCategorySelect();
-    } catch (err) {
-      if (token !== DASH.token) return;
-      DASH.error = err;
-      setStatus(`falha ao carregar os gráficos: ${err.message}`, 'err');
-      ['dashIndex', 'dashSupply', 'dashRanking', 'dashCategoryChart', 'dashRadar', 'dashScatter']
-        .forEach((id) => drawEmpty(id, 'Não foi possível carregar o histórico agora.'));
+  function refresh() {
+    if (!DASH.snapshot || !window.Plotly || !DASH.active) return;
+    renderKpis();
+    renderRadar();
+    renderRanking();
+    const when = new Date(DASH.snapshot.generated_at);
+    setStatus(Number.isNaN(when.getTime())
+      ? 'dados da última coleta'
+      : `coleta de ${when.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+    const note = d$('dashNote');
+    if (note) {
+      note.textContent =
+        'Os gráficos usam os dados da última coleta. Quando falta um dado, a linha ' +
+        'quebra; não preenchemos o buraco com zero.';
     }
   }
 
   async function activate() {
     DASH.active = true;
-    bindRanges();
     if (!DASH.snapshot) {
       setStatus('aguardando o primeiro snapshot…');
       return;
@@ -789,12 +358,12 @@
     try {
       await loadPlotly();
       if (!DASH.active) return;
-      await refresh();
+      refresh();
       // Se a janela mudou com a aba oculta, o Plotly guardou a largura antiga.
       resizeVisible();
     } catch (err) {
       setStatus(`Plotly indisponível: ${err.message}`, 'err');
-      ['dashIndex', 'dashSupply', 'dashRanking', 'dashCategoryChart', 'dashRadar', 'dashScatter']
+      ['dashRanking', 'dashRadar', 'trendChart', 'trendCatChart']
         .forEach((id) => drawEmpty(id, 'Plotly não carregou da cópia local.'));
     }
   }
@@ -808,11 +377,161 @@
     });
   }
 
+  /* ---------------- evolução (dados vêm do app.js) ---------------- */
+
+  const DAY_MS = 86400000;
+
+  // Sem null, a linha só quebra em salto bem maior que o passo normal
+  // (fim de semana e série mensal não são lacuna). Com null, o próprio
+  // null quebra. Até `rebuiltUntil` a série é recálculo diário e sai
+  // tracejada, com a ponte para a medição ao vivo.
+  function trendTraces(s, bucketSeconds) {
+    const pts = (s.points || [])
+      .map((p) => ({ t: p.t, ms: Date.parse(p.t), v: p.v === null || p.v === undefined ? null : Number(p.v) }))
+      .filter((p) => Number.isFinite(p.ms))
+      .sort((a, b) => a.ms - b.ms);
+    if (!pts.length) return [];
+    const hasNulls = pts.some((p) => p.v === null);
+    const diffs = [];
+    for (let i = 1; i < pts.length; i += 1) {
+      const d = pts[i].ms - pts[i - 1].ms;
+      if (d > 0) diffs.push(d);
+    }
+    diffs.sort((a, b) => a - b);
+    const median = diffs.length ? diffs[diffs.length >> 1] : DAY_MS;
+    const gapMs = hasNulls ? Infinity : Math.max(bucketSeconds ? bucketSeconds * 1800 : 0, median * 4);
+    const rebuiltGap = Math.max(gapMs === Infinity ? 0 : gapMs, DAY_MS * 1.8);
+    const rebuiltMs = s.rebuiltUntil ? Date.parse(s.rebuiltUntil) : NaN;
+    const isRebuilt = (p) => Number.isFinite(rebuiltMs) && p.ms <= rebuiltMs;
+
+    const old = [];
+    const live = [];
+    let prev = null;
+    for (const p of pts) {
+      const list = isRebuilt(p) ? old : live;
+      const gap = isRebuilt(p) ? rebuiltGap : gapMs;
+      if (prev && prev.v !== null && p.v !== null && list.length && p.ms - prev.ms > gap) {
+        list.push({ t: prev.t, v: null });
+      }
+      if (!isRebuilt(p) && prev && isRebuilt(prev) && p.ms - prev.ms <= rebuiltGap) old.push(p);
+      list.push(p);
+      prev = p;
+    }
+    const name = dEsc(s.label);
+    const unit = s.unit && s.unit !== '0-100' ? ` ${dEsc(s.unit)}` : '';
+    const fmt = `%{y:.${s.decimals ?? 1}f}`;
+    const trace = (list, extra) => ({
+      x: list.map((p) => p.t),
+      y: list.map((p) => p.v),
+      type: 'scatter',
+      mode: modeFor(list.filter((p) => p.v !== null)),
+      name,
+      legendgroup: s.key,
+      connectgaps: false,
+      line: { color: s.color, width: 2.2 },
+      hovertemplate: `${fmt}${unit}<extra>${name}</extra>`,
+      ...extra,
+    });
+    const out = [];
+    if (old.length) {
+      out.push(trace(old, {
+        showlegend: false,
+        line: { color: s.color, width: 1.6, dash: 'dash' },
+        opacity: 0.8,
+        hovertemplate: `${fmt}${unit}<extra>${name} · recalculado</extra>`,
+      }));
+    }
+    if (live.length) out.push(trace(live, {}));
+    return out;
+  }
+
+  // cfg: { series, bars, from, to, range, bucketSeconds, zoomToData,
+  // showLegend, empty, yTitle, zeroLabel }. Barras vão no eixo da direita;
+  // zeroLabel marca a linha de zero com um rótulo.
+  async function drawTrend(id, cfg) {
+    try {
+      await loadPlotly();
+    } catch (err) {
+      const el = d$(id);
+      if (el) el.innerHTML = `<p class="dash-error">Plotly não carregou da cópia local: ${dEsc(err.message)}</p>`;
+      return;
+    }
+    const traces = (cfg.series || []).flatMap((s) => trendTraces(s, cfg.bucketSeconds));
+    const bars = (cfg.bars || []).filter((b) => (b.points || []).length);
+    bars.forEach((b) => traces.push({
+      x: b.points.map((p) => p.t),
+      y: b.points.map((p) => p.v),
+      type: 'bar',
+      name: dEsc(b.label),
+      yaxis: 'y2',
+      marker: { color: 'rgba(45,212,167,.45)' },
+      hovertemplate: `%{y:+.2f}%<extra>${dEsc(b.label)}</extra>`,
+    }));
+    if (!traces.length) {
+      drawEmpty(id, cfg.empty || 'Ainda não há histórico para mostrar.');
+      return;
+    }
+    const stamps = traces.flatMap((t) => t.x.map((x) => Date.parse(x))).filter(Number.isFinite);
+    let x0 = Date.parse(cfg.from);
+    let x1 = Date.parse(cfg.to);
+    // O período pedido manda no eixo; só "Tudo" e o gráfico por produto
+    // acompanham o trecho com dados, para não espremer os pontos na borda.
+    if (cfg.zoomToData && stamps.length) {
+      const lo = Math.min(...stamps);
+      const hi = Math.max(...stamps);
+      const pad = hi > lo ? Math.max((hi - lo) * 0.05, 60000) : 30 * 60000;
+      x0 = Number.isFinite(x0) ? Math.max(x0, lo - pad) : lo - pad;
+      x1 = Number.isFinite(x1) ? Math.min(x1, hi + pad) : hi + pad;
+      if (x1 <= x0) { x0 = lo - pad; x1 = hi + pad; }
+    }
+    const xaxis = { type: 'date', tickformat: xTickFormat(cfg.range), hoverformat: '%d/%m/%Y %H:%M' };
+    if (Number.isFinite(x0) && Number.isFinite(x1) && x1 > x0) {
+      xaxis.range = [new Date(x0).toISOString(), new Date(x1).toISOString()];
+    }
+    const extra = {
+      showlegend: Boolean(cfg.showLegend),
+      xaxis,
+      yaxis: { title: { text: cfg.yTitle || '', font: { size: 10 } }, zerolinecolor: COLOR.zero },
+    };
+    if (bars.length) {
+      extra.margin = { l: 52, r: 52, t: 30, b: 38 };
+      extra.bargap = 0.55;
+      extra.yaxis2 = {
+        overlaying: 'y',
+        side: 'right',
+        showgrid: false,
+        zerolinecolor: COLOR.zero,
+        tickfont: { size: 10, color: '#64748b' },
+        title: { text: 'inflação do mês (%)', font: { size: 10 } },
+      };
+    }
+    if (cfg.zeroLabel) {
+      extra.shapes = [{
+        type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0, y1: 0,
+        line: { color: '#475569', width: 1, dash: 'dot' },
+      }];
+      extra.annotations = [{
+        xref: 'paper', x: 0.005, xanchor: 'left', y: 0, yref: 'y', yanchor: 'bottom',
+        text: dEsc(cfg.zeroLabel), showarrow: false, font: { size: 10, color: '#64748b' },
+      }];
+    }
+    if (!cfg.showLegend) extra.margin = { ...(extra.margin || {}), l: 54, r: bars.length ? 52 : 18, t: 16, b: 38 };
+    draw(id, traces, extra);
+  }
+
+  // Radar e ranking trocam entre lado a lado e empilhados em 1200 px: o
+  // Plotly precisa medir de novo a largura do cartão.
+  if (window.matchMedia) {
+    const wide = window.matchMedia('(min-width: 1200px)');
+    const onChange = () => resizeVisible();
+    if (wide.addEventListener) wide.addEventListener('change', onChange);
+    else if (wide.addListener) wide.addListener(onChange);
+  }
+
   function onSnapshot(snap) {
     const changed = !DASH.snapshot || DASH.snapshot.generated_at !== snap.generated_at;
     DASH.snapshot = snap;
-    if (changed) DASH.cache.clear();
-    if (DASH.active) {
+    if (changed && DASH.active) {
       if (window.Plotly) refresh();
       else activate();
     }
@@ -826,7 +545,7 @@
     activate,
     deactivate,
     onSnapshot,
+    drawTrend,
     get snapshot() { return DASH.snapshot; },
-    get range() { return DASH.range; },
   };
 })();

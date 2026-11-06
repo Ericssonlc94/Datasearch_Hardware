@@ -155,7 +155,8 @@ main { max-width: var(--max); padding: 34px 28px 70px; }
 
 .block { margin-bottom: 54px; }
 .block-head { max-width: 820px; margin-bottom: 24px; }
-#tab-overview .block { margin-bottom: 68px; }
+/* Detalhes: uma divisória antes de cada bloco, a partir do termômetro. */
+#tab-overview .block { margin-bottom: 40px; padding-top: 40px; border-top: 1px solid var(--line); }
 #tab-overview .block:last-child { margin-bottom: 0; }
 #tab-overview .block-head { margin-bottom: 30px; }
 .block-head h2 {
@@ -255,7 +256,7 @@ body.booting .error .btn { display: inline-flex; }
 
 .simple-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(250px, .65fr);
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 34vw, 380px);
   gap: 48px;
   margin: 0 0 34px;
   padding: 30px 0 54px;
@@ -278,7 +279,10 @@ body.booting .error .btn { display: inline-flex; }
   line-height: 1.62;
 }
 .simple-lead strong { color: var(--txt); }
-.simple-actions { gap: 10px; margin-top: 28px; }
+/* Os botões descem até a base da linha, alinhados ao selo do medidor, seja
+   qual for a altura do texto ao lado. */
+.simple-hero-copy { display: flex; flex-direction: column; align-items: flex-start; }
+.simple-actions { gap: 10px; margin-top: auto; padding-top: 28px; }
 .simple-thermo {
   justify-content: flex-end;
   border-left: 1px solid var(--line);
@@ -301,12 +305,23 @@ body.booting .error .btn { display: inline-flex; }
 .thermo-bar { height: 4px; background: linear-gradient(90deg, var(--cool), #8e97a6 48%, var(--warm) 72%, var(--hot)); }
 .thermo-marker { top: -6px; width: 2px; height: 16px; background: var(--txt); box-shadow: 0 0 0 3px var(--bg); }
 .thermo-labels { color: var(--txt-3); font-size: 9.5px; letter-spacing: .04em; }
-.simple-br { margin-top: 20px; font-size: 12.5px; line-height: 1.65; }
+/* T40: o medidor semicircular fica na Visão Geral, ao lado do texto; o
+   termômetro de barra fica em Detalhes, no lugar do medidor. */
+.simple-hero .simple-gauge {
+  align-self: end;
+  border-top: 0;
+  border-left: 0;
+  padding: 0 0 0 38px;
+}
+.hero .detail-thermo {
+  justify-content: flex-start;
+  border-left: 0;
+  border-top: 1px solid var(--line);
+  padding: 18px 0 0;
+}
+.detail-thermo .simple-score { font-size: clamp(64px, 7vw, 92px); }
 
-.simple-guide,
-.simple-card,
-.simple-watch-card,
-.simple-glossary {
+.simple-watch-card {
   background: transparent;
   border: 0;
   border-top: 1px solid var(--line);
@@ -314,21 +329,8 @@ body.booting .error .btn { display: inline-flex; }
   box-shadow: none;
   padding: 28px 0;
 }
-.simple-guide { margin-bottom: 0; }
-.simple-guide h3,
 .simple-card h3,
 .simple-watch-card h3 { font-family: var(--display); font-size: 24px; font-weight: 400; letter-spacing: -.025em; }
-.simple-guide-grid { gap: 34px; }
-.simple-guide-grid > div { padding: 0; background: transparent; border: 0; border-radius: 0; }
-.guide-num {
-  display: block;
-  width: auto; height: auto; margin: 0 0 8px;
-  background: none; color: var(--accent);
-  font-family: var(--display); font-size: 28px; line-height: 1;
-}
-.simple-guide-grid strong { font-size: 13.5px; }
-.simple-guide-grid p { font-size: 12.5px; }
-.simple-caveat { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
 
 .simple-grid { gap: 52px; margin-bottom: 0; }
 .simple-watch { gap: 30px; }
@@ -362,7 +364,7 @@ body.booting .error .btn { display: inline-flex; }
 }
 .rank-icon svg,
 .simple-cat-icon svg { width: 18px; height: 18px; }
-.rank-title { align-items: center; }.simple-glossary summary { font-family: var(--display); font-size: 20px; font-weight: 400; }
+.rank-title { align-items: center; }
 
 /* ---------- detalhes / fila ---------- */
 
@@ -392,17 +394,6 @@ body.booting .error .btn { display: inline-flex; }
 .kpi-label { font-size: 9.5px; letter-spacing: .10em; }
 .kpi-value { font-family: var(--display); font-size: 29px; font-weight: 400; }
 .kpi-sub { font-size: 11.5px; }
-
-.interpretation {
-  max-width: 75ch;
-  margin-bottom: 36px;
-  padding: 0 0 0 18px;
-  background: transparent;
-  border-left: 2px solid var(--accent);
-  border-radius: 0;
-  color: var(--txt-2);
-  font-size: 14.5px;
-}
 
 .chart-card { padding: 22px 24px 16px; }
 .chart-card h3 { font-size: 13px; font-weight: 600; letter-spacing: .01em; }
@@ -481,39 +472,6 @@ body.booting .error .btn { display: inline-flex; }
 .headlines li .headline-text { color: var(--txt); }
 .headlines li a:hover { color: var(--accent); }
 
-/* Cartão do dólar: explicação recolhida em .driver-more, na tipografia da tese. */
-.fx-why { max-width: 76ch; margin: 10px 0 4px; font-size: 12.5px; }
-.fx-why h4 {
-  margin: 14px 0 8px;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--txt-3);
-}
-.fx-why h4:first-child { margin-top: 4px; }
-.fx-why h4 .muted { font: inherit; letter-spacing: inherit; color: var(--txt-3); }
-.fx-why ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
-.fx-why li, .fx-why p { font-size: 12.5px; line-height: 1.62; color: var(--txt-2); }
-.fx-why p { margin: 0 0 8px; }
-.driver-more .fx-why p.muted { margin: 0; color: var(--txt-3); }
-.fx-split {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--neutral);
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-.fx-split-br { display: block; height: 100%; background: var(--accent); }
-.fx-split-legend {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  font: 11px/1.2 var(--mono);
-  color: var(--txt-3);
-}
-
 /* "O que já ficou mais caro": nome inteiro, barra e valor na mesma linha. */
 .ipca-list { list-style: none; margin: 0; padding: 0; }
 .ipca-row {
@@ -568,8 +526,6 @@ body.booting .error .btn { display: inline-flex; }
 .pager-btn.active { color: var(--accent); border-color: var(--line-strong); }
 .pager-btn:disabled { opacity: .35; cursor: default; }
 .pager-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
-
-.table-wrap { border-radius: var(--radius-sm); border-color: var(--line); }
 th { background: transparent; border-bottom: 1px solid var(--line-strong); font-size: 9.5px; letter-spacing: .10em; }
 td { background: transparent; border-top-color: var(--line); }
 td .u { color: var(--txt-3); }
@@ -860,8 +816,8 @@ select option:disabled { color: var(--txt-3); }
   font-size: 10.5px;
 }
 .chip b { color: var(--txt); }
-/* O min-width: 620px global de table é para as tabelas largas em .table-wrap;
-   aqui a tabela acompanha o card do produto. */
+/* O min-width: 620px global de table não serve aqui: a tabela acompanha
+   o card do produto. */
 .detail-table { min-width: 0; font-size: 11.5px; }
 .detail-table th { font-size: 9px; letter-spacing: .08em; }
 .detail-table td { border-bottom-color: var(--line); }
@@ -932,6 +888,14 @@ select option:disabled { color: var(--txt-3); }
 /* ---------- gráficos Plotly ---------- */
 
 .dash-toolbar { margin-bottom: 20px; }
+.dash-now { margin-bottom: 32px; }
+.dash-supply { margin-bottom: 32px; }
+.dash-supply > .muted { margin: -6px 0 14px; }
+/* Radar e ranking lado a lado só a partir de 1200 px; abaixo, empilhados. */
+@media (max-width: 1199.98px) {
+  .dash-now { grid-template-columns: 1fr; }
+}
+.dash-period-title { margin: 0 0 12px; font-family: var(--display); font-size: 25px; font-weight: 400; }
 .dash-status {
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -949,24 +913,6 @@ select option:disabled { color: var(--txt-3); }
 .dash-hint { color: var(--txt-3); font-size: 10.5px; }
 .dash-note { color: var(--txt-3); font-size: 10.5px; }
 .dash-select { padding: 7px 10px; font-size: 12px; }
-
-/* ---------- técnico ---------- */
-
-.tech-grid { gap: 30px; }
-.tech-grid .card {
-  padding: 20px 0 0;
-  background: transparent;
-  border: 0;
-  border-top: 1px solid var(--line);
-  border-radius: 0;
-  box-shadow: none;
-}
-.tech-grid .card h3 { font-family: var(--display); font-size: 23px; font-weight: 400; }
-.tech-grid .card p { font-size: 12.5px; }
-.tech-limits { gap: 10px; font-size: 12.5px; }
-.tech-terms { font-size: 12.5px; }
-.tech-terms dt { color: var(--txt); }
-.tech-terms dd { color: var(--txt-2); }
 
 /* ---------- footer ---------- */
 
@@ -1029,9 +975,10 @@ footer {
   .simple-hero { grid-template-columns: 1fr; gap: 32px; padding-top: 18px; }
   .simple-hero h2 { max-width: 17ch; }
   .simple-thermo { border-left: 0; border-top: 1px solid var(--line); padding: 24px 0 0; }
+  .simple-hero .simple-gauge { border-left: 0; border-top: 0; padding: 8px 0 0; width: 100%; max-width: 380px; }
+  .detail-thermo .simple-score { font-size: 72px; }
   .simple-score { font-size: 92px; }
   .simple-grid { gap: 34px; }
-  .simple-guide-grid { grid-template-columns: 1fr; gap: 22px; }
   .simple-watch { grid-template-columns: 1fr 1fr; gap: 22px; }
   .hero { grid-template-columns: 1fr; gap: 24px; }
   .kpis { grid-template-columns: 1fr 1fr; }
@@ -1079,3 +1026,87 @@ footer {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- aba Fontes ---------- */
+/* Lista, não tabela: no celular cada fonte quebra linha sem rolagem lateral. */
+.src-groups { display: grid; gap: 26px; }
+.src-group h3 { margin: 0 0 8px; font-family: var(--display); font-size: 21px; font-weight: 400; }
+.src-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.src-item { padding: 10px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.src-item-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.src-name { overflow-wrap: anywhere; color: var(--txt); }
+.src-dates,
+.src-note { margin-top: 3px; font-size: 11.5px; color: var(--txt-3); overflow-wrap: anywhere; }
+.src-foot { margin-top: 26px; }
+
+/* Os cards da Visão Geral ficam sem a linha de cima: a divisória única é a do hero. */
+.simple-card { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 28px 0; }
+.simple-watch-card { border-top: 1px solid var(--line); }
+/* O número acompanha a largura do medidor (unidade de container). */
+.simple-gauge { container-type: inline-size; }
+.simple-gauge .gauge-value { font-size: max(56px, 24cqi); line-height: 1; }
+
+/* Detalhes: só as divisórias entre os blocos; nada de linha dentro deles. */
+#tab-overview .kpi,
+#tab-overview .driver,
+#tab-overview .driver-more,
+#tab-overview .headlines li,
+#tab-overview .ipca-row,
+#tab-overview .ipca-row:last-child,
+#tab-overview .hero .detail-thermo { border-top: 0; border-bottom: 0; border-left: 0; }
+
+/* Detalhes: espaçamento padronizado. 40 px entre blocos (acima e abaixo da
+   divisória), 24 px do título ao conteúdo, e um passo fixo entre os itens de
+   cada lista, sem sobra no primeiro e no último. */
+#tab-overview .hero { margin-bottom: 40px; }
+#tab-overview .hero .detail-thermo { padding-top: 0; }
+#tab-overview .kpi { padding: 4px 0 4px 20px; }
+#tab-overview .kpi:first-child { padding-left: 0; }
+#tab-overview .block-head { margin-bottom: 24px; }
+#tab-overview .driver { padding: 20px 0; }
+#tab-overview .headlines li { padding: 12px 0; }
+#tab-overview .ipca-row { padding: 10px 0; }
+#tab-overview .driver:first-child,
+#tab-overview .headlines li:first-child,
+#tab-overview .ipca-row:first-child { padding-top: 0; }
+#tab-overview .driver:last-child,
+#tab-overview .headlines li:last-child,
+#tab-overview .ipca-row:last-child { padding-bottom: 0; }
+#tab-overview .driver-more { margin-top: 12px; padding-top: 0; }
+@media (max-width: 900px) {
+  #tab-overview .kpi, #tab-overview .kpi:first-child { padding: 12px 0 0; }
+}
+/* Exceção pedida: uma divisória entre cada causa de "O que está por trás do número". */
+#tab-overview .driver + .driver { border-top: 1px solid var(--line); }
+#tab-overview .headline-pager { border-top: 0; }
+/* Detalhes: uma linha vertical separa a pressão geral dos KPIs ao lado. */
+#tab-overview .hero .kpis { border-left: 1px solid var(--line); padding-left: 30px; }
+@media (max-width: 900px) {
+  #tab-overview .hero .kpis { border-left: 0; padding-left: 0; }
+}
+
+/* Visão Geral: os dois cards lado a lado dividem as mesmas linhas (subgrid),
+   então título, texto e cada um dos três itens começam na mesma altura nos
+   dois blocos. As listas viram "contents" para os itens entrarem na grade. */
+.simple-grid { grid-template-rows: repeat(5, auto); row-gap: 0; }
+.simple-grid > .simple-card {
+  display: grid;
+  grid-row: span 5;
+  grid-template-rows: subgrid;
+  align-content: start;
+}
+#simpleReasons, #simpleCategories { display: contents; }
+@media (max-width: 900px) {
+  .simple-grid > .simple-card + .simple-card { margin-top: 34px; }
+}
+
+/* Detalhes: os três KPIs ficam sempre numa grade fixa, com o mesmo espaço
+   entre eles (gap, não padding), para o último não sobrar desalinhado. */
+#tab-overview .hero .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 28px; row-gap: 16px; }
+#tab-overview .kpi, #tab-overview .kpi:first-child { padding: 4px 0; }
+@media (max-width: 560px) {
+  #tab-overview .hero .kpis { grid-template-columns: 1fr; }
+  #tab-overview .kpi, #tab-overview .kpi:first-child { padding: 0; }
+}
+/* Detalhes: o selo (oficial/estimativa) fica numa linha própria, abaixo do nome. */
+#tab-overview .hero .kpi-label .badge { display: table; margin: 6px 0 0; }

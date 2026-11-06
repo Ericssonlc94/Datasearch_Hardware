@@ -1,7 +1,7 @@
 /* DataSearch Hardware — painel.
-   Os gráficos pequenos e a evolução usam SVG desenhado à mão, sem dependência
-   externa. A aba Gráficos carrega Plotly local sob demanda (dashboard.js).
-   O gráfico de evolução (crosshair, tooltip, teclado) vive em charts.js. */
+   Os gráficos pequenos usam SVG desenhado à mão, sem dependência externa.
+   A aba Gráficos (que inclui a evolução) usa Plotly local, carregado sob
+   demanda por dashboard.js; aqui ficam os dados, o estado e os textos. */
 
 const REFRESH_MS = 15 * 60 * 1000;
 const RANGES = ['all', '24h', '7d', '30d', '90d', '1y'];
@@ -86,7 +86,7 @@ function scoreColor(score) {
 }
 
 /* Tradução curta dos vetores para as abas de leitura simples. O texto técnico
-   completo continua disponível em Detalhes, Preços e Técnico. */
+   completo continua disponível em Detalhes, Preços e Gráficos. */
 const PLAIN_DRIVER = {
   alocacao_chips: 'Mais capacidade vai para datacenter e IA, e sobra menos chip para o consumidor.',
   ormuz_helio: 'Risco no Estreito de Ormuz e na oferta de hélio pode encarecer insumos e transporte.',
@@ -295,57 +295,6 @@ function renderIpcaList(list, items) {
   }).join('');
 }
 
-function barChart(svg, items, opts = {}) {
-  const W = 640, H = opts.height || 260, P = { t: 14, r: 14, b: 58, l: 52 };
-  if (!items || !items.length) {
-    svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" fill="#64748b" font-size="13" text-anchor="middle">sem dados disponíveis</text>`;
-    return;
-  }
-  const vals = items.map((i) => i.v);
-  const maxAbs = Math.max(...vals.map(Math.abs), 0.1);
-  const min = Math.min(0, -maxAbs * 1.05), max = Math.max(0, maxAbs * 1.05);
-
-  const iw = W - P.l - P.r, ih = H - P.t - P.b;
-  const y = (v) => P.t + ih - ((v - min) / (max - min)) * ih;
-  const zero = y(0);
-  const step = iw / items.length;
-  const bw = Math.min(step * 0.66, 46);
-
-  const pct = opts.percent !== false;
-  const dec = opts.decimals ?? 1;
-  const axisDec = opts.axisDecimals ?? 1;
-  const fmtVal = (v) => (pct ? `${v.toFixed(dec)}%` : fmtNum(v, dec));
-
-  let grid = '';
-  for (let i = 0; i <= 4; i++) {
-    const gy = P.t + (ih * i) / 4;
-    const gv = max - ((max - min) * i) / 4;
-    grid += `<line x1="${P.l}" y1="${gy}" x2="${W - P.r}" y2="${gy}" stroke="#263149" stroke-width="1"/>`;
-    grid += `<text x="${P.l - 8}" y="${gy + 4}" fill="#64748b" font-size="10" text-anchor="end" font-family="monospace">${gv.toFixed(axisDec)}</text>`;
-  }
-
-  const bars = items.map((it, i) => {
-    const cx = P.l + step * i + step / 2;
-    const top = it.v >= 0 ? y(it.v) : zero;
-    const h = Math.max(1.5, Math.abs(zero - y(it.v)));
-    const color = opts.color || (it.v >= 0 ? '#ff6b6b' : '#2dd4a7');
-    const label = esc(it.t);
-    const short = label.length > 15 ? label.slice(0, 14) + '…' : label;
-    return `
-      <rect x="${cx - bw / 2}" y="${top}" width="${bw}" height="${h}" rx="3" fill="${color}" opacity=".85">
-        <title>${label}: ${fmtVal(it.v)}</title>
-      </rect>
-      <text x="${cx}" y="${(it.v >= 0 ? top - 5 : top + h + 12)}" fill="#94a3bd" font-size="10"
-            text-anchor="middle" font-family="monospace">${fmtVal(it.v)}</text>
-      <text x="${cx}" y="${H - 30}" fill="#64748b" font-size="9.5" text-anchor="end"
-            transform="rotate(-38 ${cx} ${H - 30})">${short}</text>`;
-  }).join('');
-
-  svg.innerHTML = `${grid}
-    <line x1="${P.l}" y1="${zero}" x2="${W - P.r}" y2="${zero}" stroke="#475569" stroke-width="1.5"/>
-    ${bars}`;
-}
-
 function renderGauge(svg, score) {
   const W = 220, H = 132, cx = 110, cy = 112, r = 86;
   const polar = (deg) => {
@@ -387,14 +336,21 @@ const trendState = {
   catalog: null,
   mainData: null,
   catData: null,
+  ipcaData: null,
   lit: false,
 };
 const trendCache = new Map();
 const trendColors = new Map();
 let trendToken = 0;
+const TREND_COLORS = [
+  '#4f8cff', '#2dd4a7', '#ff9f43', '#ff5c5c',
+  '#c084fc', '#38bdf8', '#f472b6', '#a3e635',
+];
 
 function colorFor(key) {
-  if (!trendColors.has(key)) trendColors.set(key, trendColor(trendColors.size));
+  if (!trendColors.has(key)) {
+    trendColors.set(key, TREND_COLORS[trendColors.size % TREND_COLORS.length]);
+  }
   return trendColors.get(key);
 }
 
@@ -607,18 +563,12 @@ function renderTrendSummary(series, mainData) {
     : '';
 }
 
-// Pontos antes de `model_since` usam a conta antiga da série (a fila desde a
-// T06; com a T24, também iph, iph_br, alocação de chips e cat.*). Só entra na
-// nota se houver ponto nesse trecho.
-function oldModelNotes(series) {
-  return series.flatMap((s) => {
-    const since = Date.parse(s.modelSince);
-    if (!Number.isFinite(since)) return [];
-    if (!(s.points || []).some((p) => Date.parse(p.t) < since)) return [];
-    const day = new Date(since).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-    return [`${s.label}: o trecho esmaecido e pontilhado, até ${day}, usa a conta antiga ` +
-      'e não é comparável com os pontos seguintes.'];
-  });
+// Pontos antes de `model_since` usam a conta antiga da série e não entram
+// no gráfico: não são comparáveis com os seguintes.
+function currentPoints(s) {
+  const since = Date.parse(s.model_since);
+  const pts = s.points || [];
+  return Number.isFinite(since) ? pts.filter((p) => Date.parse(p.t) >= since) : pts;
 }
 
 function renderRebuiltNotice(series) {
@@ -638,7 +588,6 @@ function renderRebuiltNotice(series) {
       'cheia é a medição ao vivo, a cada 15 minutos.'
     );
   }
-  parts.push(...oldModelNotes(series));
   if (!parts.length) {
     notice.textContent = '';
     notice.classList.add('hidden');
@@ -648,9 +597,12 @@ function renderRebuiltNotice(series) {
   notice.classList.remove('hidden');
 }
 
+function drawTrend(id, cfg) {
+  if (window.Dash) window.Dash.drawTrend(id, cfg);
+}
+
 function renderTrend() {
   const mainData = trendState.mainData;
-  const mainSvg = $('trendChart');
 
   const labels = new Map(
     (mainData ? mainData.series : []).map((s) => [s.key, s.label])
@@ -669,19 +621,17 @@ function renderTrend() {
       label: s.label,
       unit: s.unit,
       color: colorFor(s.key),
-      points: s.points,
+      points: currentPoints(s),
       rebuiltUntil: s.reconstructed_until,
-      modelSince: s.model_since,
       decimals: s.unit === '%' ? 2 : 1,
     }));
-    trendChart(mainSvg, {
+    drawTrend('trendChart', {
       series,
-      t0: mainData.from,
-      t1: mainData.to,
+      from: mainData.from,
+      to: mainData.to,
+      range: mainData.range,
       bucketSeconds: mainData.bucket_seconds,
       zoomToData: mainData.range === 'all',
-      decimals: 1,
-      height: 340,
     });
     const total = series.reduce((acc, s) => acc + s.points.length, 0);
     const bucketText = mainData.raw
@@ -693,7 +643,10 @@ function renderTrend() {
     renderTrendSummary(series, mainData);
     renderRebuiltNotice(series);
   } else {
-    trendChart(mainSvg, { series: [], height: 340 });
+    drawTrend('trendChart', {
+      series: [],
+      empty: trendState.visible.length ? 'Carregando histórico…' : 'Nenhuma série selecionada.',
+    });
     $('trendMeta').textContent = trendState.visible.length
       ? 'Carregando histórico…'
       : 'Nenhuma série selecionada.';
@@ -710,31 +663,43 @@ function renderTrend() {
   if (catData) {
     const series = catData.series.map((s) => ({
       key: s.key,
-      label: s.label,
+      label: s.label.replace(/ — .*$/, ''),
       unit: s.unit,
       color: colorFor(s.key),
-      points: s.points,
+      points: currentPoints(s),
       rebuiltUntil: s.reconstructed_until,
-      modelSince: s.model_since,
       decimals: 2,
     }));
-    renderLegend($('trendCatLegend'), series.map((s) => ({
-      key: s.key, label: s.label, color: s.color, on: true,
-    })));
-    const catSvg = $('trendCatChart');
-    trendChart(catSvg, {
+    // Só as duas estimativas no gráfico. O eixo acompanha o trecho com
+    // estimativa; o IPCA mensal (anos de história) vai em texto ao lado.
+    drawTrend('trendCatChart', {
       series,
-      t0: catData.from,
-      t1: catData.to,
+      from: catData.from,
+      to: catData.to,
+      range: catData.range,
       bucketSeconds: catData.bucket_seconds,
-      // A série de projeção nasce junto com o banco. O eixo acompanha o
-      // trecho que existe para não espremer os pontos na borda.
       zoomToData: true,
-      decimals: 2,
-      height: 280,
+      showLegend: true,
+      yTitle: 'estimativa 30d (%)',
+      zeroLabel: 'estável',
+      empty: 'Ainda não há histórico deste produto.',
     });
-    renderCatTexts(series, catData, catSvg._trend?.zoomed);
+    renderCatIpca(trendState.ipcaData);
+    const zoomed = series.some((s) => s.points.length);
+    renderCatTexts(series, catData, zoomed);
   }
+}
+
+// Último IPCA oficial do produto, em texto: a série mensal não entra no eixo.
+function renderCatIpca(data) {
+  const el = $('trendCatIpca');
+  if (!el) return;
+  const pts = ((data && data.series[0] && data.series[0].points) || [])
+    .filter((p) => p.v !== null && p.v !== undefined);
+  const last = pts[pts.length - 1];
+  el.textContent = last
+    ? `IBGE, último mês: ${fmtPct(Number(last.v), 2)}, mês ${String(last.t).slice(0, 7)}`
+    : 'IBGE: sem inflação oficial para este produto.';
 }
 
 // Cada ponto do gráfico por produto é uma estimativa para os 30 dias
@@ -773,13 +738,19 @@ async function refreshTrend() {
       `cat.${trendState.category}.proj30_global`,
       `cat.${trendState.category}.proj30_br`,
     ];
-    const [mainData, catData] = await Promise.all([
+    // O IPCA é mensal: busca o histórico inteiro para achar o último mês,
+    // qualquer que seja o período escolhido.
+    const ipcaKey = `obs.${trendState.category}.ipca`;
+    const inCatalog = (trendState.catalog?.groups || []).some((g) => g.series.some((x) => x.key === ipcaKey));
+    const [mainData, catData, ipcaData] = await Promise.all([
       fetchHistory(trendState.range, trendState.visible),
       fetchHistory(trendState.range, catKeys),
+      inCatalog ? fetchHistory('all', [ipcaKey]) : null,
     ]);
     if (token !== trendToken) return; // uma troca de período mais nova venceu
     trendState.mainData = mainData;
     trendState.catData = catData;
+    trendState.ipcaData = ipcaData;
     renderTrend();
   } catch (err) {
     if (token === trendToken) trendError(err.message);
@@ -801,7 +772,7 @@ async function loadSeriesCatalog(force = false) {
   buildSeriesPicker();
   chooseDefaultRange();
   syncTrendControls();
-  if (activeTab === 'tendencia') syncTrendHash();
+  if (activeTab === 'dashboard') syncTrendHash();
 }
 
 async function ensureTrendLoaded() {
@@ -826,7 +797,9 @@ function openSignal(key) {
   trendState.range = 'all';
   trendState.rangeExplicit = true;
   syncTrendControls();
-  activateTab('tendencia');
+  activateTab('dashboard');
+  const card = $('trendChart');
+  if (card) card.scrollIntoView({ block: 'center' });
 }
 
 function toggleTrendSeries(key) {
@@ -842,7 +815,7 @@ function toggleTrendSeries(key) {
 }
 
 function syncTrendHash() {
-  history.replaceState(null, '', '#' + buildHash('tendencia'));
+  history.replaceState(null, '', '#' + buildHash('dashboard'));
 }
 
 /* ---------------- abas e URL ---------------- */
@@ -851,24 +824,37 @@ let activeTab = 'visao-geral';
 // Sub-aba de Preços: 'produtos' (padrão) ou 'mercado'; vai no hash como ?view=mercado.
 let priceView = 'produtos';
 const PRICE_VIEWS = ['produtos', 'mercado'];
+// Link antigo da Fila (#fila ou #dashboard?view=fila): ao abrir Gráficos,
+// rola até a seção Consumidor vs Datacenter.
+let scrollToSupply = false;
 
-const TAB_ALIASES = { entenda: 'visao-geral' };
+// Links antigos: "entenda" e "tecnico" caem na Visão Geral; "tendencia"
+// (Evolução) e "fila" foram juntadas à aba Gráficos.
+const TAB_ALIASES = {
+  entenda: 'visao-geral',
+  tendencia: 'dashboard',
+  fila: 'dashboard',
+  tecnico: 'visao-geral', // aba removida na T38
+};
 const normalizeTab = (name) => TAB_ALIASES[name] || name;
 
 function buildHash(tab) {
   if (tab === 'ranking') return priceView === 'mercado' ? 'ranking?view=mercado' : 'ranking';
-  if (tab !== 'tendencia') return tab;
+  if (tab !== 'dashboard') return tab;
   const p = new URLSearchParams();
   p.set('range', trendState.range);
   if (trendState.visible.length) p.set('series', trendState.visible.join(','));
   p.set('cat', trendState.category);
-  return `tendencia?${p.toString()}`;
+  return `dashboard?${p.toString()}`;
 }
 
 function parseHash() {
   const raw = location.hash.replace(/^#/, '');
   const [tab, query] = raw.split('?');
-  return { tab: normalizeTab(tab || 'visao-geral'), params: new URLSearchParams(query || '') };
+  const params = new URLSearchParams(query || '');
+  // Link antigo da aba Fila: abre Gráficos na seção Consumidor vs Datacenter.
+  if (tab === 'fila') params.set('view', 'fila');
+  return { tab: normalizeTab(tab || 'visao-geral'), params };
 }
 
 function applyPriceParams(params) {
@@ -890,6 +876,10 @@ function setPriceView(view, { syncHash = true } = {}) {
   if (syncHash && activeTab === 'ranking') {
     history.replaceState(null, '', '#' + buildHash('ranking'));
   }
+}
+
+function applyChartParams(params) {
+  scrollToSupply = params.get('view') === 'fila';
 }
 
 function applyTrendParams(params) {
@@ -921,7 +911,14 @@ function activateTab(name, { syncHash = true } = {}) {
     p.classList.toggle('hidden', p.id !== `tab-${target}`);
   });
 
-  if (target === 'tendencia') ensureTrendLoaded();
+  if (target === 'dashboard') {
+    ensureTrendLoaded();
+    if (scrollToSupply) {
+      scrollToSupply = false;
+      const section = $('consumidorDatacenter');
+      if (section) requestAnimationFrame(() => section.scrollIntoView({ block: 'start' }));
+    }
+  }
   if (window.Prices) {
     if (target === 'ranking') {
       setPriceView(priceView, { syncHash: false });
@@ -961,7 +958,12 @@ function bindTabKeys(list, activate) {
 
 function bindTabs() {
   document.querySelectorAll('.tab').forEach((tab) => {
-    tab.addEventListener('click', () => activateTab(tab.dataset.tab));
+    tab.addEventListener('click', () => {
+      activateTab(tab.dataset.tab);
+      // Troca de aba pelo clique começa no topo; deep links (#fila) rolam
+      // até a seção no próprio activateTab.
+      window.scrollTo(0, 0);
+    });
   });
   bindTabKeys(document.querySelector('.tabs'), (b) => activateTab(b.dataset.tab));
   const views = document.querySelector('.price-views');
@@ -976,44 +978,13 @@ function bindTabs() {
     const { tab, params } = parseHash();
     applyTrendParams(params);
     applyPriceParams(params);
+    applyChartParams(params);
     syncTrendControls();
     activateTab(tab, { syncHash: false });
   });
 }
 
 /* ---------------- render ---------------- */
-
-/* ---------------- dólar: por que se mexeu e o impacto ---------------- */
-
-function fxExplanationHtml(fx) {
-  if (!fx) return '';
-  const reasons = (fx.reasons || [])
-    .map((r) => `<li>${esc(r.text)}</li>`)
-    .join('');
-  const share = fx.domestic_share;
-  const split = share !== null && share !== undefined && Math.abs(fx.brl_change_30d_pct) >= 0.5
-    ? `<div class="fx-split" role="img" aria-label="Parte brasileira ${Math.round(share * 100)}%, parte global ${Math.round((1 - share) * 100)}%">
-         <span class="fx-split-br" style="width:${(share * 100).toFixed(0)}%"></span>
-       </div>
-       <div class="fx-split-legend"><span>causa brasileira ${Math.round(share * 100)}%</span><span>causa global ${Math.round((1 - share) * 100)}%</span></div>`
-    : '';
-  // Recolhido, no mesmo traço do "Ver sinais e fontes": o card do câmbio fica
-  // com a mesma estrutura dos outros e o detalhe abre sob demanda.
-  return `<details class="driver-more">
-    <summary>Por que o dólar se mexeu e o efeito no preço (30 dias)</summary>
-    <div class="fx-why">
-    <h4>Por que o dólar se mexeu <span class="muted small">últimos 30 dias</span></h4>
-    ${split}
-    <ul>${reasons}</ul>
-    <h4>O que isso faz com o preço <span class="badge modeled">estimativa</span></h4>
-    <p>${esc(fx.impact_hardware)}</p>
-    <p>${esc(fx.impact_market)}</p>
-    <p class="muted small">A parte "brasileira" é o quanto o real se moveu além de moedas
-      parecidas (México, Chile, África do Sul, Colômbia). Indica de onde veio a pressão;
-      não prova a causa.</p>
-    </div>
-  </details>`;
-}
 
 /* ---------------- notícias: 5 por página, até 3 páginas ---------------- */
 
@@ -1108,11 +1079,12 @@ function bindHeadlinePager() {
 }
 
 function renderOverview(d) {
-  renderGauge($('gauge'), d.summary.iph);
-  $('iphValue').textContent = d.summary.iph.toFixed(1);
-  $('iphValue').style.color = scoreColor(d.summary.iph);
-  $('iphLabel').textContent = d.summary.iph_label;
-  $('interpretation').textContent = d.summary.interpretation;
+  // Termômetro simples do índice total (T40), sem rodapé.
+  const iph = Number(d.summary.iph) || 0;
+  $('iphValue').textContent = iph.toFixed(0);
+  $('iphValue').style.color = scoreColor(iph);
+  $('iphLabel').textContent = 'Pressão sobre o preço (0 a 100)';
+  $('iphMarker').style.left = `${Math.max(0, Math.min(100, iph))}%`;
 
   const b = d.brazil;
   $('kpis').innerHTML = `
@@ -1131,11 +1103,7 @@ function renderOverview(d) {
       <div class="kpi-value">${fmtPct(b.ipca_12m, 2)}</div>
       <div class="kpi-sub">Selic ${b.selic ? b.selic.toFixed(2) + '%' : '—'} · IGP-M ${fmtPct(b.igpm_12m, 2)}</div>
     </div>
-    <div class="kpi">
-      <div class="kpi-label">Dados disponíveis</div>
-      <div class="kpi-value">${(d.summary.coverage * 100).toFixed(0)}%</div>
-      <div class="kpi-sub">${d.degraded.length} fonte(s) com problema</div>
-    </div>`;
+`;
 
   // Drivers — cada sinal é um atalho para a série dele na aba Evolução.
   // Exibição do maior para o menor score; sort é estável, então empate mantém a
@@ -1173,13 +1141,9 @@ function renderOverview(d) {
       <div class="meter-scale"><span>alívio</span><span>neutro 50</span><span>pressão</span></div>
       <p class="thesis">${esc(dr.thesis)}</p>
       <div class="coverage" title="Peso deste driver no índice e parcela dos sinais com dado disponível no ciclo.">Peso no índice ${(dr.weight * 100).toFixed(0)}% · cobertura ${(dr.coverage * 100).toFixed(0)}%</div>
-      ${dr.key === 'cambio_br' ? fxExplanationHtml(b.fx_explanation) : ''}
       ${more}
     </article>`;
   }).join('');
-
-  lineChart($('fxChart'), b.usd_brl_series, { color: '#4f8cff', decimals: 3 });
-  barChart($('ipcaChart'), b.ipca_series.slice(-14), { height: 220 });
 
   // IPCA 12m por subitem, deduplicado.
   const seen = new Set();
@@ -1195,22 +1159,13 @@ function renderOverview(d) {
   renderIpcaList($('ipcaBars'), bars);
 
   renderHeadlines(d.headlines || []);
-
-  // Fontes
-  $('sources').innerHTML = d.sources.map((s) => `<tr>
-      <td>${esc(s.label)}${s.note ? `<span class="u">${esc(s.note)}</span>` : ''}${s.error ? `<span class="u">${esc(s.error)}</span>` : ''}</td>
-      <td>${esc(s.provider)}</td>
-      <td>${s.as_of ? esc(s.as_of.slice(0, 10)) : '—'}</td>
-      <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
-    </tr>`).join('');
 }
 
 // Oferta por frente (§T24c): dias de estoque na memória e nos chips, % a/a na
 // demanda. Formato "N dias · o normal é X a Y", sem tooltip. Até o domínio
 // ligar as frentes, cada card diz que não há dado.
+// T36: só a frente de demanda aparece; memória e lógica saíram dos cards.
 const FRONT_CARDS = [
-  { key: 'memoria', label: 'Memória (Micron)' },
-  { key: 'logica', label: 'Chips (NVIDIA/AMD/Intel)' },
   { key: 'demanda', label: 'Demanda (capex + TSMC)' },
 ];
 
@@ -1236,64 +1191,10 @@ function frontCards(d) {
   });
 }
 
+// Consumidor vs Datacenter (aba Gráficos): só os dois gráficos oficiais
+// que ficaram da antiga aba Fila.
 function renderQueue(d) {
   const s = d.supply || {};
-  const q = s.queue_pressure;
-  const gauge = $('queueGauge');
-
-  if (q === null || q === undefined) {
-    gauge.innerHTML = `<text x="110" y="72" fill="#64748b" font-size="12" text-anchor="middle">sem dados de fila</text>`;
-    $('queueValue').textContent = '—';
-    $('queueValue').style.color = 'var(--txt-2)';
-  } else {
-    renderGauge(gauge, q);
-    $('queueValue').textContent = q.toFixed(1);
-    $('queueValue').style.color = scoreColor(q);
-  }
-  $('queueLabel').textContent = s.queue_label || 'Fila do consumidor';
-
-  let queueNote;
-  if (q === null || q === undefined) {
-    queueNote = 'Sem dados de fila nesta rodada. O modelo não preenche lacuna com estimativa.';
-  } else {
-    const qs = Number(q);
-    const status = qs >= 75 ? 'A fila está crítica: o consumidor deve esperar bem mais.'
-      : qs >= 62 ? 'A fila está longa: as empresas de IA estão consumindo capacidade antes do varejo.'
-        : qs >= 53 ? 'A fila está apertando: há menos folga para o consumidor.'
-          : qs >= 47 ? 'A fila está equilibrada: sem sinal forte para nenhum lado.'
-            : qs >= 38 ? 'A fila está folgada: há mais espaço para o consumidor.'
-              : 'A fila está curta: o consumidor encontra mais oferta.';
-    queueNote = `${status} Nota: ${qs.toFixed(0)}/100.`;
-  }
-  $('queueNote').textContent = queueNote;
-
-  $('queueKpis').innerHTML = `
-    <div class="kpi">
-      <div class="kpi-label">Investimento em IA <span class="badge observed">oficial</span></div>
-      <div class="kpi-value">${fmtUsdCompact(s.capex_ttm_usd)}</div>
-      <div class="kpi-sub ${dirClass(s.capex_growth_pct)}">${fmtPct(s.capex_growth_pct)} a/a · 5 grandes empresas</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Receita de chips <span class="badge observed">oficial</span></div>
-      <div class="kpi-value">${fmtUsdCompact(s.chip_revenue_ttm_usd)}</div>
-      <div class="kpi-sub ${dirClass(s.chip_revenue_growth_pct)}">${fmtPct(s.chip_revenue_growth_pct)} a/a · NVIDIA, Micron e AMD</div>
-    </div>
-    ${frontCards(d).map((f) => `<div class="kpi">
-      <div class="kpi-label">${esc(f.label)} <span class="badge ${f.stale ? 'stale' : 'observed'}">${f.stale ? 'desatualizado' : 'oficial'}</span></div>
-      <div class="kpi-value">${esc(f.value)}</div>
-      <div class="kpi-sub">${esc(f.note)}</div>
-    </div>`).join('')}
-    <div class="kpi">
-      <div class="kpi-label">Desvio para IA <span class="badge modeled">estimativa</span></div>
-      <div class="kpi-value">${s.diversion_index === null || s.diversion_index === undefined ? '—' : (s.diversion_index >= 0 ? '+' : '') + fmtNum(s.diversion_index, 2)}</div>
-      <div class="kpi-sub">acima de 0 = mais capacidade para IA</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Memória importada <span class="badge observed">oficial</span></div>
-      <div class="kpi-value">${fmtUsdCompact(s.comtrade_volume_usd)}</div>
-      <div class="kpi-sub ${dirClass(s.comtrade_volume_change_pct)}">${s.comtrade_year ? esc(s.comtrade_year) + ' · ' : ''}${fmtPct(s.comtrade_volume_change_pct)} a/a</div>
-    </div>`;
-
   const capex = (s.capex_series || []).map((p) => ({ t: p.t, v: p.v / 1e9 }));
   lineChart($('capexChart'), capex, {
     color: '#ff9f43', decimals: 0, axisDecimals: 0,
@@ -1301,17 +1202,56 @@ function renderQueue(d) {
   lineChart($('inventoryChart'), s.inventory_series || [], {
     color: '#2dd4a7', decimals: 2, axisDecimals: 2,
   });
-  barChart($('comtradeChart'), (s.comtrade_series || []).map((p) => ({
-    t: p.t, v: p.v / 1e9,
-  })), {
-    percent: false, decimals: 1, axisDecimals: 0, color: '#4f8cff', height: 220,
-  });
+}
 
-  const asOf = s.as_of ? esc(String(s.as_of).slice(0, 10)) : '—';
-  $('queueMeta').textContent =
-    `Investimento em US$ bilhões · SEC EDGAR, dados trimestrais · referência ${asOf} · ` +
-    `dados disponíveis ${((s.coverage || 0) * 100).toFixed(0)}% · ` +
-    `investimento, receita, estoque e volume são oficiais; fila e desvio são estimativa nossa.`;
+/* ---------------- fontes ---------------- */
+
+// Mesmos selos do resto do painel; o status nunca vai direto para o HTML.
+const SOURCE_STATUS = {
+  ok: { text: 'ok', cls: 'ok' },
+  stale: { text: 'desatualizada', cls: 'stale' },
+  unavailable: { text: 'indisponível', cls: 'unavailable' },
+  disabled: { text: 'desligada', cls: 'neutral' },
+};
+
+function fmtSourceDate(raw, withTime) {
+  const d = raw ? new Date(raw) : null;
+  if (!d || Number.isNaN(d.getTime())) return '—';
+  return withTime
+    ? d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString('pt-BR');
+}
+
+function sourceItemHtml(s) {
+  const href = safeUrl(s.url);
+  const name = href
+    ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(s.label)}</a>`
+    : esc(s.label);
+  const st = SOURCE_STATUS[s.status] || SOURCE_STATUS.unavailable;
+  return `<li class="src-item">
+      <div class="src-item-head"><span class="src-name">${name}</span>
+        <span class="badge ${st.cls}">${esc(st.text)}</span></div>
+      <div class="src-dates">referência ${esc(fmtSourceDate(s.as_of, false))} · última coleta ${esc(fmtSourceDate(s.fetched_at, true))}</div>
+      ${s.note ? `<div class="src-note">${esc(s.note)}</div>` : ''}
+    </li>`;
+}
+
+// Aba Fontes: snap.sources agrupado por provedor, na ordem em que aparecem.
+function renderSources(d) {
+  const el = $('sourceGroups');
+  if (!el) return;
+  const groups = new Map();
+  for (const s of d.sources || []) {
+    const key = s.provider || 'Outros';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(s);
+  }
+  el.innerHTML = groups.size
+    ? [...groups].map(([provider, list]) => `<section class="src-group">
+        <h3>${esc(provider)}</h3>
+        <ul class="src-list">${list.map(sourceItemHtml).join('')}</ul>
+      </section>`).join('')
+    : '<p class="muted">Nenhuma fonte nesta coleta.</p>';
 }
 
 function renderRanking(d) {
@@ -1348,7 +1288,7 @@ function renderRanking(d) {
     ...items.map((it) => Math.abs(Number(it.projected_brazil_30d_pct) || 0))
   );
 
-  $('ranking').innerHTML = items.map((it, index) => {
+  $('priceRanking').innerHTML = items.map((it, index) => {
     const o = it.observed_br;
     const im = it.imports;
     const drivers = it.top_drivers || [];
@@ -1442,14 +1382,13 @@ function renderSimple(d) {
   const b = d.brazil || {};
   const sup = d.supply || {};
   const score = Number(s.iph) || 0;
-  const br = Number(s.iph_brazil) || 0;
   const color = scoreColor(score);
 
-  $('simpleScore').textContent = score.toFixed(0);
+  // Medidor semicircular (T40: veio de Detalhes).
+  renderGauge($('simpleGauge'), score);
+  $('simpleScore').textContent = score.toFixed(1);
   $('simpleScore').style.color = color;
-  $('simpleScoreLabel').textContent = 'Pressão sobre o preço (0 a 100)';
-  const marker = $('simpleMarker');
-  if (marker) marker.style.left = `${Math.max(0, Math.min(100, score))}%`;
+  $('simpleScoreLabel').textContent = s.iph_label || 'Pressão sobre o preço de hardware';
 
   const rankedDrivers = [...(d.drivers || [])].sort(
     (a, b2) => (b2.score * b2.weight) - (a.score * a.weight)
@@ -1464,16 +1403,6 @@ function renderSimple(d) {
     `${esc(simpleTrend(score))} ` +
     'Quanto maior a nota, mais forte é a pressão sobre o preço de hardware.' + topText;
 
-  const diff = br - score;
-  const brText = diff >= 3
-    ? `No Brasil, a pressão chega <strong>mais forte</strong> (${br.toFixed(0)}/100). O dólar e os impostos de importação ajudam a explicar.`
-    : diff <= -3
-      ? `No Brasil, a pressão chega <strong>mais fraca</strong> (${br.toFixed(0)}/100). O câmbio ajuda a amortecer.`
-      : `No Brasil, a leitura é <strong>parecida</strong> (${br.toFixed(0)}/100). Dólar e impostos não mudam a direção.`;
-  const coverage = Number.isFinite(Number(s.coverage))
-    ? ` Nesta rodada, ${(Number(s.coverage) * 100).toFixed(0)}% dos dados chegaram; o que faltou não foi inventado.`
-    : '';
-  $('simpleBrazil').innerHTML = brText + coverage;
 
   $('simpleReasons').innerHTML = rankedDrivers.slice(0, 3).map((dr, i) => {
     const ds = Number(dr.score) || 0;
@@ -1551,6 +1480,7 @@ function render(d) {
   renderOverview(d);
   renderQueue(d);
   renderRanking(d);
+  renderSources(d);
   populateTrendCategories();
   $('disclaimer').textContent = d.disclaimer;
 
@@ -1569,10 +1499,10 @@ function render(d) {
     trendCache.clear();
     loadSeriesCatalog(true)
       .then(() => {
-        if (activeTab === 'tendencia') refreshTrend();
+        if (activeTab === 'dashboard') refreshTrend();
       })
       .catch(() => {
-        if (activeTab === 'tendencia') refreshTrend();
+        if (activeTab === 'dashboard') refreshTrend();
       });
   }
   // Primeira abertura: o painel inteiro aparece de uma vez, só agora.
@@ -1667,11 +1597,23 @@ function initTrendControls() {
     if (chip) toggleTrendSeries(chip.dataset.key);
   });
 
-  $('trendCategory').addEventListener('change', (ev) => {
-    trendState.category = ev.target.value;
-    syncTrendHash();
-    refreshTrend();
+  $('trendCategory').addEventListener('change', (ev) => selectTrendCategory(ev.target.value));
+
+  // Clique numa barra do ranking Plotly (dashboard.js).
+  window.addEventListener('dash:category', (ev) => {
+    selectTrendCategory(ev.detail && ev.detail.key);
+    const chart = $('trendCatChart');
+    if (chart) chart.scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
+}
+
+function selectTrendCategory(key) {
+  if (!key || !snapshot || !snapshot.ranking.some((it) => it.key === key)) return;
+  trendState.category = key;
+  const sel = $('trendCategory');
+  if (sel) sel.value = key;
+  syncTrendHash();
+  refreshTrend();
 }
 
 function initDrillDown() {
@@ -1693,7 +1635,9 @@ function init() {
   bindHeadlinePager();
   document.addEventListener('click', (ev) => {
     const jump = ev.target.closest('[data-goto]');
-    if (jump) activateTab(jump.dataset.goto);
+    if (!jump) return;
+    activateTab(jump.dataset.goto);
+    window.scrollTo(0, 0);
   });
   $('refreshBtn').addEventListener('click', () => load(true));
   $('retryBtn').addEventListener('click', () => load(true));
@@ -1705,6 +1649,7 @@ function init() {
   const { tab, params } = parseHash();
   applyTrendParams(params);
   applyPriceParams(params);
+  applyChartParams(params);
   syncTrendControls();
   activateTab(tab, { syncHash: false });
 

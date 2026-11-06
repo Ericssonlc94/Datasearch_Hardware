@@ -42,7 +42,7 @@ tsmc = _optional_provider("tsmc")
 log = logging.getLogger(__name__)
 
 DISCLAIMER = (
-    "Esta é uma estimativa nossa, feita com dados públicos. Não é uma "
+    "Esta é uma estimativa, feita com dados públicos. Não é uma "
     "previsão garantida nem recomendação de compra. Os números oficiais "
     "(inflação, dólar, importação) aparecem identificados; o resto é conta "
     "do modelo. Quer conferir as fontes? Abra a aba Técnico."

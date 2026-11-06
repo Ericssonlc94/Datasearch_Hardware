@@ -31,13 +31,11 @@ Todas as fontes são públicas. Nenhuma exige cadastro ou chave.
 
 | Aba | Para quê |
 | --- | --- |
-| **Visão Geral** | Leitura de um minuto: a pressão de hoje, os fatores que mais pesam e os produtos com maior variação estimada. |
-| **Detalhes** | Cada fator explicado, com os sinais que o compõem, o dólar, a inflação de eletrônicos e as manchetes relevantes. |
-| **Gráficos** | Gráficos interativos da pressão, dos fatores e das estimativas por produto. |
-| **Evolução** | O histórico de cada número ao longo do tempo. |
-| **Fila** | Se o consumidor está no fim da fila: investimento em IA, receita dos fabricantes de chips e estoque de memória e de chips. |
+| **Visão Geral** | Leitura de um minuto: o medidor da pressão de hoje, os três fatores que mais pesam, os três produtos com maior variação estimada e o que vale acompanhar. |
+| **Detalhes** | A pressão total ao lado da pressão no Brasil, do dólar e da inflação; cada fator (causa econômica ou geopolítica) com os sinais que o compõem; a inflação de eletrônicos medida pelo IBGE; e as notícias que afetam o preço. |
 | **Preços** | **Produtos**: a variação estimada por categoria. **Produtos no mercado**: o preço atual na KaBuM por faixa, com até 3 anúncios de referência por modelo. |
-| **Técnico** | Metodologia, pesos, fórmulas e o estado de cada fonte, para quem quer auditar. |
+| **Gráficos** | Gráficos interativos da pressão, dos fatores e das estimativas por produto; a seção **Consumidor vs Datacenter**, sobre a alocação de chips (investimento das empresas de IA e estoque de memória da Micron); e o histórico ao longo do tempo. |
+| **Fontes** | Todas as fontes usadas, com link, situação (em dia, desatualizada, indisponível ou desligada) e data da última coleta. |
 
 O painel se atualiza sozinho a cada 15 minutos. Os preços da loja são lidos
 uma vez por semana.
@@ -62,7 +60,7 @@ Todo número do painel é de um destes dois tipos:
 
 - **Dado oficial**: medição de terceiros, como IPCA, cotação do dólar ou
   balanço de empresa.
-- **Estimativa nossa**: resultado do modelo do painel, como o índice de
+- **Estimativa**: resultado do modelo do painel, como o índice de
   pressão e as projeções de 30 dias.
 
 Quando uma fonte falha, o painel mostra o último valor válido marcado como
@@ -74,7 +72,6 @@ suposição.
 - O preço de varejo vem de **uma única loja**. É um termômetro do mercado, não
   a média de todas as lojas.
 - Os pesos e as sensibilidades do modelo são estimativas de ordem de grandeza.
-  Estão expostos na aba Técnico justamente para serem questionados.
 - A variação de preço na loja só aparece depois de algumas semanas de coleta.
 
 ## Para quem desenvolve

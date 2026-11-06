@@ -23,7 +23,7 @@ Cada painel retoma a própria conversa com `claude --resume <id>` e depois roda
 
 | Função | Painel herdr | Terminal | Sessão (id) |
 | --- | --- | --- | --- |
-| Coordenador | 1 | t10 | 7d176540-a03d-45e8-9b11-b3e9236c8c36 |
+| Coordenador | 1 | t10 | ef5a40c7-f52c-41b7-a2a2-e148f39069e3 |
 | Dados e modelo | 2 | t1 | 45a82ff0-c3d9-41d2-a92c-a9afb6d4ee0d |
 | Modelo | 3 | t5 | 597ba87c-2d5c-44c9-99aa-ef4538c64fa6 |
 | Backend | 4 | t2 | 96cff875-4a3e-46b1-8f61-9d9f1b228314 |

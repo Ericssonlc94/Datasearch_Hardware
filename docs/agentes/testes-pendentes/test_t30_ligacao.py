@@ -205,12 +205,14 @@ def test_historico_grava_preco_do_vendedor_fixado(tmp_path):
     assert out["3"][0]["avail"] == 1
 
 
-def test_faixa_exibida_nao_sobrepoe_o_nivel_de_cima():
+def test_faixa_fixa_da_curadoria_contigua():
+    """T35d: a faixa fixa só serve à curadoria e ao filtro; a exibida é a observada."""
     from app.domain import prices as P
     from app.domain.catalog import CATEGORIES_BY_KEY
 
-    assert P.display_range("gpu", "baixo") == (1500, 2500)  # RX 6600 segue na curadoria até 4.150
+    assert P.curation_range("gpu", "baixo") == (1500, 2500)
     for key in CATEGORIES_BY_KEY:
         bands = P.expected_bands(key)
         for low, high in zip(bands, bands[1:]):
-            assert P.display_range(key, low)[1] <= P.display_range(key, high)[0], key
+            assert P.curation_range(key, low)[1] <= P.curation_range(key, high)[0], key
+    assert P.observed_range({"a": 1000.0, "b": None, "c": 3000.0}) == (1000.0, 3000.0)

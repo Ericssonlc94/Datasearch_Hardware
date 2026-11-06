@@ -210,18 +210,8 @@ function trendChart(svg, cfg) {
 
   const lines = series.map((s) => {
     const rebuiltMs = s.rebuiltUntil ? Date.parse(s.rebuiltUntil) : NaN;
-    // Antes de `modelSince` a série usa uma versão antiga da conta: o trecho
-    // continua visível, mas esmaecido e pontilhado, sem ponte para o novo.
-    const sinceMs = s.modelSince ? Date.parse(s.modelSince) : NaN;
-    const hasOld = Number.isFinite(sinceMs);
-    const oldPts = hasOld ? s.pts.filter((p) => p.ms < sinceMs) : [];
-    const newPts = hasOld ? s.pts.filter((p) => p.ms >= sinceMs) : s.pts;
-    const o = _trendPath(oldPts, x, y, cfg.bucketSeconds, NaN);
-    const oldPath = o.live
-      ? `<path class="trend-old-model" d="${o.live}" fill="none" stroke="${s.color}" stroke-width="1.6" stroke-dasharray="2 4" stroke-opacity="0.4" stroke-linejoin="round" stroke-linecap="round" data-key="${s.key}"/>`
-      : '';
-    const d = _trendPath(newPts, x, y, cfg.bucketSeconds, rebuiltMs);
-    if (!d.live && !d.rebuilt && !oldPath) return '';
+    const d = _trendPath(s.pts, x, y, cfg.bucketSeconds, rebuiltMs);
+    if (!d.live && !d.rebuilt) return '';
     const last = [...s.pts].reverse().find((p) => p.v !== null);
     const dot = last
       ? `<circle cx="${x(last.ms).toFixed(1)}" cy="${y(last.v).toFixed(1)}" r="3.2" fill="${s.color}"/>`
@@ -232,7 +222,7 @@ function trendChart(svg, cfg) {
     const live = d.live
       ? `<path d="${d.live}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" data-key="${s.key}"/>`
       : '';
-    return `${oldPath}${rebuilt}${live}${dot}`;
+    return `${rebuilt}${live}${dot}`;
   }).join('');
 
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -337,13 +327,11 @@ function _trendShow(svg, ms, ev) {
     dots += `<circle cx="${st.x(p.ms).toFixed(1)}" cy="${st.y(p.v).toFixed(1)}" r="3.6" fill="${s.color}" stroke="#0b0f17" stroke-width="1.5"/>`;
     const dec = s.decimals ?? st.decimals;
     const when = st.span > 40 * 864e5 ? fmtPointDate(p.ms, st.span) : '';
-    const sinceMs = s.modelSince ? Date.parse(s.modelSince) : NaN;
-    const oldNote = Number.isFinite(sinceMs) && p.ms < sinceMs ? ' · conta antiga' : '';
     rows.push(
       `<div class="tip-row"><span class="tip-dot" style="background:${s.color}"></span>` +
       `<span class="tip-label">${_tipEsc(s.label)}</span>` +
       `<b>${_trendNum(p.v, dec)}</b>` +
-      `<span class="tip-unit">${_tipEsc(s.unit || '')}${when ? ' · ' + _tipEsc(when) : ''}${oldNote}</span></div>`
+      `<span class="tip-unit">${_tipEsc(s.unit || '')}${when ? ' · ' + _tipEsc(when) : ''}</span></div>`
     );
   }
   cross.querySelector('.cross-dots').innerHTML = dots;

@@ -30,11 +30,9 @@
   <nav class="tabs" role="tablist" aria-label="Seções do painel">
     <button class="tab active" data-tab="visao-geral" role="tab" id="tabbtn-visao-geral" aria-controls="tab-visao-geral" aria-selected="true" tabindex="0">Visão Geral</button>
     <button class="tab" data-tab="overview" role="tab" id="tabbtn-overview" aria-controls="tab-overview" aria-selected="false" tabindex="-1">Detalhes</button>
-    <button class="tab" data-tab="dashboard" role="tab" id="tabbtn-dashboard" aria-controls="tab-dashboard" aria-selected="false" tabindex="-1">Gráficos</button>
-    <button class="tab" data-tab="tendencia" role="tab" id="tabbtn-tendencia" aria-controls="tab-tendencia" aria-selected="false" tabindex="-1">Evolução</button>
-    <button class="tab" data-tab="fila" role="tab" id="tabbtn-fila" aria-controls="tab-fila" aria-selected="false" tabindex="-1">Fila</button>
     <button class="tab" data-tab="ranking" role="tab" id="tabbtn-ranking" aria-controls="tab-ranking" aria-selected="false" tabindex="-1">Preços</button>
-    <button class="tab" data-tab="tecnico" role="tab" id="tabbtn-tecnico" aria-controls="tab-tecnico" aria-selected="false" tabindex="-1">Técnico</button>
+    <button class="tab" data-tab="dashboard" role="tab" id="tabbtn-dashboard" aria-controls="tab-dashboard" aria-selected="false" tabindex="-1">Gráficos</button>
+    <button class="tab" data-tab="fontes" role="tab" id="tabbtn-fontes" aria-controls="tab-fontes" aria-selected="false" tabindex="-1">Fontes</button>
   </nav>
 
   <main>
@@ -65,47 +63,20 @@
           <h2>O que está acontecendo com o preço?</h2>
           <p class="simple-lead" id="simpleLead">Carregando a leitura…</p>
           <div class="simple-actions">
-            <button class="btn" data-goto="tendencia">Ver a evolução</button>
+            <button class="btn" data-goto="dashboard">Ver a evolução</button>
             <button class="btn" data-goto="overview">Ver os detalhes</button>
-            <button class="btn btn-ghost" data-goto="tecnico">Como calculamos</button>
           </div>
         </div>
-        <div class="simple-thermo" aria-label="Termômetro de pressão de preço">
-          <div class="simple-score" id="simpleScore">—</div>
-          <div class="simple-score-label" id="simpleScoreLabel">Pressão sobre o preço (0 a 100)</div>
-          <div class="thermo">
-            <div class="thermo-bar">
-              <span class="thermo-marker" id="simpleMarker"></span>
-            </div>
-            <div class="thermo-labels">
-              <span>alívio</span><span>equilíbrio</span><span>pressão</span><span>crítica</span>
-            </div>
+        <!-- T40: o medidor semicircular veio de Detalhes; lá ficou o termômetro. -->
+        <div class="gauge-card simple-gauge">
+          <svg id="simpleGauge" viewBox="0 0 220 132" class="gauge" role="img" aria-label="Medidor da pressão sobre o preço, de 0 a 100"></svg>
+          <div class="gauge-meta">
+            <div class="gauge-value" id="simpleScore">—</div>
+            <div class="gauge-label" id="simpleScoreLabel">Pressão sobre o preço de hardware</div>
+            <div class="badge modeled">estimativa</div>
           </div>
-          <p class="simple-br" id="simpleBrazil"></p>
         </div>
       </div>
-
-      <section class="card simple-guide" aria-labelledby="simpleGuideTitle">
-        <h3 id="simpleGuideTitle">Como ler em 30 segundos</h3>
-        <div class="simple-guide-grid">
-          <div>
-            <span class="guide-num">1</span>
-            <strong>Olhe a nota</strong>
-            <p>É uma nota de 0 a 100. Abaixo de 47, o ambiente está mais tranquilo. De 47 a 52, está equilibrado. De 53 a 59, pede atenção. De 60 a 71, a pressão é alta; de 72 para cima, é severa.</p>
-          </div>
-          <div>
-            <span class="guide-num">2</span>
-            <strong>Veja as barras</strong>
-            <p>Elas mostram o que mais está pesando agora. Quanto maior a barra, mais aquele fator está influenciando o preço.</p>
-          </div>
-          <div>
-            <span class="guide-num">3</span>
-            <strong>Leia as porcentagens</strong>
-            <p>São uma estimativa para os próximos 30 dias. Servem para comparar produtos, não como promessa de preço.</p>
-          </div>
-        </div>
-        <p class="simple-caveat">A nota é uma estimativa nossa. Ela não é recomendação de compra e não garante que o preço vai subir ou cair.</p>
-      </section>
 
       <div class="simple-grid">
         <section class="card simple-card">
@@ -127,16 +98,6 @@
         <div id="simpleWatch" class="simple-watch"></div>
       </section>
 
-      <details class="card simple-glossary">
-        <summary>O que significam os termos desta tela</summary>
-        <p><strong>Pressão:</strong> é a força que os fatores atuais estão fazendo sobre o preço. Pressão alta não quer dizer que o preço já subiu; quer dizer que o ambiente está mais inclinado a um aumento.</p>
-        <p><strong>Nota de 0 a 100:</strong> abaixo de 47, alívio; de 47 a 52, equilíbrio; de 53 a 59, atenção; de 60 a 71, pressão alta; de 72 para cima, pressão severa.</p>
-        <p><strong>Estimativa nossa:</strong> resultado do modelo que combina dados públicos. Mostra direção e intensidade, mas pode errar.</p>
-        <p><strong>Dado oficial:</strong> número medido por um órgão público, como a inflação do IBGE. Serve para comparar a estimativa com a realidade.</p>
-        <p><strong>Estimativa de 30 dias:</strong> se os sinais de hoje continuarem, para onde o preço deve ir. Mudanças no dólar, na oferta ou na demanda mudam o resultado.</p>
-        <p><strong>Fila do consumidor:</strong> mostra se as grandes empresas de IA estão comprando a capacidade antes do varejo. Quanto maior, mais o consumidor espera por chips e memória.</p>
-        <p class="glossary-link">Quer conferir as fontes e a conta? <button class="linkbtn" data-goto="tecnico">Abrir a aba Técnico</button>.</p>
-      </details>
     </section>
 
     <!-- ============ DETALHES ============ -->
@@ -147,12 +108,16 @@
       </div>
 
       <div class="hero">
-        <div class="gauge-card">
-          <svg id="gauge" viewBox="0 0 220 132" class="gauge"></svg>
-          <div class="gauge-meta">
-            <div class="gauge-value" id="iphValue">—</div>
-            <div class="gauge-label" id="iphLabel">Pressão sobre o preço de hardware</div>
-            <div class="badge modeled">estimativa nossa</div>
+        <div class="simple-thermo detail-thermo" aria-label="Termômetro de pressão de preço">
+          <div class="simple-score" id="iphValue">—</div>
+          <div class="simple-score-label" id="iphLabel">Pressão sobre o preço (0 a 100)</div>
+          <div class="thermo">
+            <div class="thermo-bar">
+              <span class="thermo-marker" id="iphMarker"></span>
+            </div>
+            <div class="thermo-labels">
+              <span>alívio</span><span>equilíbrio</span><span>pressão</span><span>crítica</span>
+            </div>
           </div>
         </div>
         <div class="kpis" id="kpis"></div>
@@ -161,28 +126,9 @@
       <section class="block">
         <div class="block-head">
           <h2>O que está por trás do número</h2>
-          <p class="muted">Cada cartão é um motivo. A barra vai de 0 a 100; 50 é o meio.
-             Acima de 50, o fator está pressionando o preço para cima.</p>
+          <p class="muted">Cada cartão abaixo representa uma causa, considerando fatores econômicos e geopolíticos.</p>
         </div>
         <div class="drivers" id="drivers"></div>
-      </section>
-
-      <section class="block">
-        <div class="block-head">
-          <h2>O efeito no Brasil</h2>
-          <p class="muted">Dólar, juros e inflação: é por aqui que a pressão global chega ao consumidor brasileiro.
-             <span class="badge observed">dado oficial</span></p>
-        </div>
-        <div class="two-col">
-          <div class="card chart-card">
-            <h3>Dólar <span class="src">BCB/SGS 1</span></h3>
-            <svg id="fxChart" viewBox="0 0 640 220" class="chart"></svg>
-          </div>
-          <div class="card chart-card">
-            <h3>Inflação mensal <span class="src">BCB/SGS 433</span></h3>
-            <svg id="ipcaChart" viewBox="0 0 640 220" class="chart"></svg>
-          </div>
-        </div>
       </section>
 
       <section class="block">
@@ -197,239 +143,11 @@
       <section class="block">
         <div class="block-head">
           <h2>Notícias que ajudam a entender</h2>
-          <p class="muted">
-            Até 15 notícias (últimos 7 dias) e artigos de análise (últimos 30
-            dias) que falam diretamente de preço, escassez, tarifa, importação
-            ou oferta de hardware — o que chega ao preço no Brasil. Sem review,
-            promoção ou entretenimento. Veículos do Vale do Silício, Europa,
-            leste europeu, Ásia e Brasil, para você conferir o panorama na
-            fonte. Quando só uma fonte cobriu a história, isso é avisado — não
-            significa que a notícia seja falsa.
-          </p>
+          <p class="muted">Notícias e artigos dos últimos 7 dias sobre o panorama global do que afeta diretamente a tendência de preços de hardware no Brasil e no mundo.</p>
         </div>
         <ul class="headlines" id="headlines"></ul>
         <nav class="headline-pager hidden" id="headlinesPager" aria-label="Páginas de notícias"></nav>
       </section>
-    </section>
-
-    <!-- ============ GRÁFICOS ============ -->
-    <section id="tab-dashboard" class="tabpanel hidden" role="tabpanel" aria-labelledby="tabbtn-dashboard" tabindex="0">
-      <div class="block-head">
-        <h2>Gráficos</h2>
-        <p class="muted">
-          Passe o mouse para ler os valores. Troque o período e clique numa barra
-          para ver o produto. Os gráficos são interativos e funcionam sem internet.
-        </p>
-      </div>
-
-      <div class="dash-toolbar">
-        <div class="seg" id="dashRanges" role="group" aria-label="Período dos gráficos">
-          <button class="seg-btn active" data-range="24h">24 horas</button>
-          <button class="seg-btn" data-range="7d">7 dias</button>
-          <button class="seg-btn" data-range="30d">30 dias</button>
-          <button class="seg-btn" data-range="90d">90 dias</button>
-          <button class="seg-btn" data-range="1y">1 ano</button>
-        </div>
-        <div class="dash-status" id="dashStatus" role="status" aria-live="polite">aguardando dados…</div>
-      </div>
-
-      <div class="dash-kpis" id="dashKpis"></div>
-
-      <div class="dash-grid">
-        <div class="card dash-card dash-wide">
-          <div class="dash-card-head">
-            <h3>A pressão ao longo do tempo</h3>
-            <span class="src">histórico · 0-100</span>
-          </div>
-          <div id="dashIndex" class="plot plot-lg" role="img" aria-label="Gráfico de linhas da pressão sobre o preço ao longo do tempo"></div>
-          <p class="dash-hint">A linha tracejada em 50 é o meio. Quando falta um dado, a linha quebra; não preenchemos o buraco.</p>
-        </div>
-
-        <div class="card dash-card dash-wide">
-          <div class="dash-card-head">
-            <h3>Fila do consumidor e investimento em IA</h3>
-            <span class="src">fila estimada · investimento oficial</span>
-          </div>
-          <div id="dashSupply" class="plot plot-lg" role="img" aria-label="Gráfico da fila do consumidor e do investimento em IA"></div>
-          <p class="dash-hint">A linha da esquerda é a fila (0 a 100). A da direita é o investimento das grandes empresas de IA.</p>
-        </div>
-
-        <div class="card dash-card">
-          <div class="dash-card-head">
-            <h3>O que pode ficar mais caro em 30 dias</h3>
-            <span class="src">estimativa nossa</span>
-          </div>
-          <div id="dashRanking" class="plot plot-lg" role="img" aria-label="Barras horizontais da estimativa de 30 dias por produto"></div>
-          <p class="dash-hint">Clique numa barra para ver o histórico daquele produto.</p>
-        </div>
-
-        <div class="card dash-card">
-          <div class="dash-card-head">
-            <h3>Detalhe por tipo de produto</h3>
-            <span class="src" id="dashCategorySrc">—</span>
-          </div>
-          <select id="dashCategory" class="dash-select" aria-label="Produto do detalhe"></select>
-          <div id="dashCategoryChart" class="plot" role="img" aria-label="Histórico do produto selecionado e inflação mensal"></div>
-          <p class="dash-hint">A linha é a estimativa; as barras são a inflação oficial do IBGE.</p>
-        </div>
-
-        <div class="card dash-card">
-          <div class="dash-card-head">
-            <h3>O que está pesando agora</h3>
-            <span class="src">agora × início do período</span>
-          </div>
-          <div id="dashRadar" class="plot" role="img" aria-label="Radar dos sete fatores de pressão"></div>
-          <p class="dash-hint">Quanto mais para fora, mais aquele fator está pesando. Clique na legenda para isolar.</p>
-        </div>
-
-        <div class="card dash-card">
-          <div class="dash-card-head">
-            <h3>Pressão e alta estimada</h3>
-            <span class="src">cada bolha é um produto</span>
-          </div>
-          <div id="dashScatter" class="plot" role="img" aria-label="Dispersão entre pressão e alta estimada por produto"></div>
-          <p class="dash-hint">Bolha maior = mais pressão. Clique para ver o produto.</p>
-        </div>
-      </div>
-
-      <p class="dash-note muted small" id="dashNote"></p>
-    </section>
-
-    <!-- ============ EVOLUÇÃO ============ -->
-    <section id="tab-tendencia" class="tabpanel hidden" role="tabpanel" aria-labelledby="tabbtn-tendencia" tabindex="0">
-      <div class="block-head">
-        <h2>Evolução</h2>
-        <p class="muted">
-          Veja como a pressão e os preços estimados mudaram com o tempo. Linha
-          quebrada significa dado que faltou — não inventamos o meio.
-          <span class="badge modeled">estimativa nossa</span>
-          <span class="badge observed">dado oficial</span>
-        </p>
-      </div>
-
-      <div class="trend-card">
-        <div class="trend-toolbar">
-          <div class="seg" id="trendRanges" role="group" aria-label="Período do gráfico">
-            <button class="seg-btn active" data-range="all">Tudo</button>
-            <button class="seg-btn" data-range="24h">24h</button>
-            <button class="seg-btn" data-range="7d">7d</button>
-            <button class="seg-btn" data-range="30d">30d</button>
-            <button class="seg-btn" data-range="90d">90d</button>
-            <button class="seg-btn" data-range="1y">1a</button>
-          </div>
-          <label class="trend-add">
-            <span>Adicionar indicador</span>
-            <select id="trendSeriesPicker" aria-label="Adicionar indicador ao gráfico"></select>
-          </label>
-        </div>
-        <p class="trend-history muted small" id="trendHistory"></p>
-
-        <div class="trend-legend" id="trendLegend"></div>
-
-        <div class="trend-wrap" id="trendWrap">
-          <svg id="trendChart" viewBox="0 0 900 340" class="chart trend-chart" role="img"
-               aria-label="Séries históricas do índice e dos vetores"></svg>
-          <div class="trend-tip hidden" id="trendTip" role="status" aria-live="polite"></div>
-        </div>
-        <p class="trend-summary" id="trendSummary" aria-live="polite"></p>
-        <p class="trend-meta muted small" id="trendMeta"></p>
-        <p class="trend-notice muted small hidden" id="trendNotice"></p>
-      </div>
-
-      <div class="trend-card">
-        <div class="trend-toolbar">
-          <div class="trend-heading">
-            <h3>Evolução por produto</h3>
-            <p class="muted small" id="trendCatLead">Como a estimativa de preço para os 30 dias seguintes mudou no período escolhido, em dólar e no Brasil.</p>
-          </div>
-          <label class="trend-add">
-            <span>Produto</span>
-            <select id="trendCategory" aria-label="Produto do gráfico"></select>
-          </label>
-        </div>
-
-        <div class="trend-legend" id="trendCatLegend"></div>
-
-        <div class="trend-wrap" id="trendCatWrap">
-          <svg id="trendCatChart" viewBox="0 0 900 280" class="chart trend-chart" role="img"
-               aria-label="Evolução histórica por produto"></svg>
-          <div class="trend-tip hidden" id="trendCatTip" role="status" aria-live="polite"></div>
-        </div>
-        <p class="trend-meta muted small" id="trendCatMeta"></p>
-      </div>
-    </section>
-
-    <!-- ============ FILA DO CONSUMIDOR ============ -->
-    <section id="tab-fila" class="tabpanel hidden" role="tabpanel" aria-labelledby="tabbtn-fila" tabindex="0">
-      <div class="block-head">
-        <h2>Fila do consumidor</h2>
-        <p class="muted">
-          As grandes empresas de IA estão comprando mais capacidade. Quando o
-          estoque de memória cai, sobra menos chip para o varejo — e o consumidor
-          espera mais. A nota abaixo é uma <span class="badge modeled">estimativa nossa</span>;
-          os dados de investimento, receita e estoque são
-          <span class="badge observed">dados oficiais</span>.
-        </p>
-      </div>
-
-      <div class="hero hero-queue">
-        <div class="gauge-card">
-          <svg id="queueGauge" viewBox="0 0 220 132" class="gauge"></svg>
-          <div class="gauge-meta">
-            <div class="gauge-value" id="queueValue">—</div>
-            <div class="gauge-label" id="queueLabel">Fila do consumidor</div>
-            <div class="badge modeled">estimativa nossa</div>
-          </div>
-        </div>
-        <div class="kpis" id="queueKpis"></div>
-      </div>
-
-      <p class="interpretation" id="queueNote"></p>
-
-      <div class="two-col">
-        <div class="card chart-card">
-          <h3>Investimento das empresas de IA <span class="src">SEC EDGAR</span></h3>
-          <svg id="capexChart" viewBox="0 0 640 220" class="chart"></svg>
-        </div>
-        <div class="card chart-card">
-          <h3>Estoque de memória (Micron) <span class="src">SEC EDGAR</span></h3>
-          <svg id="inventoryChart" viewBox="0 0 640 220" class="chart"></svg>
-        </div>
-      </div>
-
-      <div class="card chart-card queue-full">
-        <h3>Memória importada pelo Brasil <span class="src">UN Comtrade · HS 854232</span></h3>
-        <svg id="comtradeChart" viewBox="0 0 640 220" class="chart"></svg>
-      </div>
-
-      <section class="block">
-        <div class="block-head">
-          <h2>Entenda a fila</h2>
-        </div>
-        <div class="queue-explain">
-          <div>
-            <strong>1. As empresas de IA investem mais.</strong> Microsoft, Amazon,
-            Google, Meta e Oracle compram capacidade para data centers. Isso
-            consome chips e memória antes de chegar à loja.
-          </div>
-          <div>
-            <strong>2. O estoque de memória cai.</strong> Quando a Micron vende
-            mais rápido do que repõe, sobra menos memória para o consumidor.
-          </div>
-          <div>
-            <strong>3. O consumidor fica para depois.</strong> A nota de 0 a 100
-            resume esses dois movimentos. Acima de 50, a fila está apertando para
-            o consumidor; abaixo, há mais folga.
-          </div>
-          <div>
-            <strong>O que não sabemos.</strong> Não existe um preço público de
-            memória spot. Em vez de inventar, mostramos a lacuna. A nota é uma
-            estimativa, não uma previsão de preço.
-          </div>
-        </div>
-      </section>
-
-      <p class="trend-meta muted small" id="queueMeta"></p>
     </section>
 
     <!-- ============ PREÇOS ============ -->
@@ -439,7 +157,7 @@
         <h2>Quanto cada produto pode subir ou cair</h2>
         <p class="muted">
           Ordenado pela estimativa de 30 dias para o Brasil.
-          <span class="badge modeled">estimativa nossa</span> é o que o modelo calcula;
+          <span class="badge modeled">estimativa</span> é o que o modelo calcula;
           <span class="badge observed">dado oficial</span> é o que já foi medido.
         </p>
       </div>
@@ -464,7 +182,7 @@
         <span></span>
       </div>
 
-      <div class="ranking" id="ranking"></div>
+      <div class="ranking" id="priceRanking"></div>
       </div>
 
       <div id="pv-mercado" class="price-view hidden" role="tabpanel" aria-labelledby="pvbtn-mercado">
@@ -478,106 +196,114 @@
       </div>
     </section>
 
-    <!-- ============ TÉCNICO ============ -->
-    <section id="tab-tecnico" class="tabpanel hidden" role="tabpanel" aria-labelledby="tabbtn-tecnico" tabindex="0">
+    <!-- ============ GRÁFICOS ============ -->
+    <section id="tab-dashboard" class="tabpanel hidden" role="tabpanel" aria-labelledby="tabbtn-dashboard" tabindex="0">
       <div class="block-head">
-        <h2>Técnico</h2>
+        <h2>Gráficos</h2>
         <p class="muted">
-          Esta aba é para quem quer conferir as fontes, a conta e os limites do
-          modelo. Você não precisa dela para usar o painel.
+          Veja como a pressão e os preços estimados mudaram com o tempo.
         </p>
       </div>
-
-      <p class="interpretation" id="interpretation"></p>
-
-      <section class="block">
-        <div class="block-head">
-          <h2>Como o número é calculado</h2>
-          <p class="muted">O IPH é uma heurística: combina sinais públicos em uma nota de 0 a 100. Não é um índice oficial.</p>
+      <div class="dash-kpis" id="dashKpis"></div>
+      <div class="dash-grid dash-now">
+        <div class="card dash-card">
+          <div class="dash-card-head">
+            <h3>O que está pesando agora</h3>
+            <span class="src">agora · 0-100</span>
+          </div>
+          <div id="dashRadar" class="plot plot-lg" role="img" aria-label="Radar dos sete fatores de pressão"></div>
+          <p class="dash-hint">Quanto mais para fora, mais aquele fator está pesando.</p>
         </div>
-        <div class="tech-grid">
-          <div class="card">
-            <h3>1. Sinais</h3>
-            <p>Cada série vira uma variação percentual na janela do sinal. Essa variação é convertida em nota com uma curva <code>tanh</code>, em que 50 é neutro. Movimentos maiores saturam perto dos extremos.</p>
+        <div class="card dash-card">
+          <div class="dash-card-head">
+            <h3>O que pode ficar mais caro em 30 dias</h3>
+            <span class="src">estimativa</span>
           </div>
-          <div class="card">
-            <h3>2. Vetores</h3>
-            <p>Sete vetores agregam os sinais por média ponderada: Ormuz/hélio, alocação de chips, terras raras, commodities, logística, Taiwan e disputa EUA–China por chips, e câmbio. Os pesos estão em <a href="/api/methodology">/api/methodology</a>.</p>
-          </div>
-          <div class="card">
-            <h3>3. IPH</h3>
-            <p>O índice é a média ponderada dos sete vetores (mercado, câmbio e terremotos olham os últimos 30 dias; séries mensais, janelas maiores). O IPH-Brasil repete a conta dando peso extra ao câmbio. Faixas: abaixo de 47 alívio; 47–52 equilíbrio; 53–59 atenção; 60–71 pressão alta; 72+ severa.</p>
-          </div>
-          <div class="card">
-            <h3>4. Fila do consumidor</h3>
-            <p><code>50 + 50·tanh(0,25·desvio + 0,25·(−z(Δestoque a/a)))</code>, com desvio = z(capex) + z(receita de chips) e z(Δestoque a/a) = z-score da variação anual do estoque da Micron. Acima de 50, o consumidor espera mais. Capex, receita, estoque e volume são observados; a fila é modelada.</p>
-          </div>
+          <div id="dashRanking" class="plot plot-lg" role="img" aria-label="Barras horizontais da estimativa de 30 dias por produto"></div>
+          <p class="dash-hint">Clique numa barra para ver a evolução daquele produto.</p>
         </div>
-      </section>
-
-      <section class="block">
-        <div class="block-head">
-          <h2>Estimativa e dado oficial</h2>
-        </div>
-        <div class="tech-grid two">
-          <div class="card tech-card">
-            <h3>Estimativa nossa <span class="badge modeled">modelado</span></h3>
-            <p>Resultado do modelo heurístico. Mostra direção e intensidade, mas não é probabilidade calibrada nem previsão validada. Não use como recomendação de compra.</p>
+      </div>
+      <!-- Consumidor vs Datacenter: os dois gráficos que ficaram da antiga aba
+           Fila. O link antigo #fila rola até aqui. -->
+      <section class="dash-supply" id="consumidorDatacenter" aria-labelledby="consumidorDatacenterTitle">
+        <h3 class="dash-period-title" id="consumidorDatacenterTitle">Consumidor vs Datacenter</h3>
+        <p class="muted small">Trata da alocação de chips entre datacenter e consumidor.</p>
+        <div class="two-col">
+          <div class="card chart-card">
+            <h3>Investimento das empresas de IA <span class="src">SEC EDGAR</span></h3>
+            <svg id="capexChart" viewBox="0 0 640 220" class="chart"></svg>
           </div>
-          <div class="card tech-card">
-            <h3>Dado oficial <span class="badge observed">observado</span></h3>
-            <p>Número medido por uma fonte pública, como IBGE, BCB, SEC ou Comtrade. Pode atrasar ou faltar; a data de referência e o status aparecem na tabela de fontes.</p>
+          <div class="card chart-card">
+            <h3>Estoque de memória (Micron) <span class="src">SEC EDGAR</span></h3>
+            <svg id="inventoryChart" viewBox="0 0 640 220" class="chart"></svg>
           </div>
         </div>
       </section>
 
-      <section class="block">
-        <div class="block-head">
-          <h2>Limites do modelo</h2>
+      <h3 class="dash-period-title">Ao longo do tempo</h3>
+      <div class="dash-toolbar">
+        <div class="seg" id="trendRanges" role="group" aria-label="Período dos gráficos abaixo">
+          <button class="seg-btn active" data-range="all">Tudo</button>
+          <button class="seg-btn" data-range="24h">24h</button>
+          <button class="seg-btn" data-range="7d">7d</button>
+          <button class="seg-btn" data-range="30d">30d</button>
+          <button class="seg-btn" data-range="90d">90d</button>
+          <button class="seg-btn" data-range="1y">1a</button>
         </div>
-        <ul class="tech-limits">
-          <li>O IPH não é previsão de preço nem recomendação de compra. Ele mede a direção e a intensidade dos fatores atuais.</li>
-          <li>Não existe preço spot público de DRAM/NAND sem chave. A lacuna é mostrada; não preenchemos com proxy silencioso.</li>
-          <li>O Comex Stat fica desligado por padrão por instabilidade da fonte; o preço de importação vem do UN Comtrade mensal (dado da SECEX). Controles de exportação EUA–China entram pelas regras do BIS no Federal Register; o sentido (aperto ou alívio) é lido no título da regra.</li>
-          <li>O IPH é um índice heurístico proprietário deste painel. Os insumos são públicos, mas o resultado é <code>modeled</code>.</li>
-          <li>O histórico cresce a cada ciclo de 15 minutos. No começo, janelas longas podem aparecer curtas no eixo — o gráfico avisa quando ajusta.</li>
-          <li>O snapshot fica em memória de processo. O servidor deve rodar com um worker para manter uma série coerente.</li>
-        </ul>
-      </section>
+        <div class="dash-status" id="dashStatus" role="status" aria-live="polite">aguardando dados…</div>
+      </div>
+      <p class="trend-history muted small" id="trendHistory"></p>
+      <div class="dash-grid">
+        <div class="card dash-card dash-wide">
+          <div class="dash-card-head trend-toolbar">
+            <div class="trend-heading">
+              <h3>A pressão ao longo do tempo</h3>
+              <span class="src">histórico · some outros indicadores ao gráfico</span>
+            </div>
+            <label class="trend-add">
+              <span>Adicionar indicador</span>
+              <select id="trendSeriesPicker" aria-label="Adicionar indicador ao gráfico"></select>
+            </label>
+          </div>
+          <div class="trend-legend" id="trendLegend"></div>
+          <div id="trendChart" class="plot plot-lg" role="img" aria-label="Séries históricas do índice e dos fatores"></div>
+          <p class="trend-summary" id="trendSummary" aria-live="polite"></p>
+          <p class="trend-meta muted small" id="trendMeta"></p>
+          <p class="trend-notice muted small hidden" id="trendNotice"></p>
+        </div>
+        <div class="card dash-card dash-wide">
+          <div class="dash-card-head trend-toolbar">
+            <div class="trend-heading">
+              <h3>Para onde a nossa estimativa de preço aponta nos próximos 30 dias</h3>
+              <p class="muted small" id="trendCatLead">Como a estimativa de preço para os 30 dias seguintes mudou no período escolhido, em dólar e no Brasil.</p>
+            </div>
+            <label class="trend-add">
+              <span>Produto</span>
+              <select id="trendCategory" aria-label="Produto do gráfico"></select>
+            </label>
+          </div>
+          <p class="trend-ipca muted small" id="trendCatIpca"></p>
+          <div id="trendCatChart" class="plot" role="img" aria-label="Estimativas global e Brasil do produto para os próximos 30 dias"></div>
+          <p class="trend-meta muted small" id="trendCatMeta"></p>
+          <p class="dash-hint">As linhas são a nossa estimativa: global em US$ e no Brasil. Acima de zero, alta; abaixo, queda.</p>
+        </div>
+      </div>
+      <p class="dash-note muted small" id="dashNote"></p>
+    </section>
 
-      <section class="block">
-        <div class="block-head">
-          <h2>Fontes e frescor do dado</h2>
-          <p class="muted">Toda métrica do painel rastreia até uma destas fontes. Status e data de referência são da última coleta.</p>
-        </div>
-        <div class="table-wrap">
-          <table class="src-table">
-            <thead>
-              <tr><th>Fonte</th><th>Provedor</th><th>Referência</th><th>Status</th></tr>
-            </thead>
-            <tbody id="sources"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="block">
-        <div class="block-head">
-          <h2>Termos técnicos</h2>
-        </div>
-        <dl class="tech-terms">
-          <dt>IPH</dt><dd>Índice de Pressão de Hardware. Nota de 0 a 100; 50 é neutro.</dd>
-          <dt>IPH-Brasil</dt><dd>O IPH com peso extra para o câmbio e a carga de importação.</dd>
-          <dt>Sinal</dt><dd>Série pública usada como entrada do modelo.</dd>
-          <dt>Vetor</dt><dd>Grupo de sinais que representam uma mesma tese, como logística ou terras raras.</dd>
-          <dt>Cobertura</dt><dd>Fração dos sinais que retornaram dados. Quando cai, o peso é redistribuído entre os presentes.</dd>
-          <dt>Capex</dt><dd>Investimento em bens de capital, como data centers e equipamentos.</dd>
-          <dt>TTM</dt><dd>Sigla de <em>trailing twelve months</em>: acumulado dos últimos 12 meses.</dd>
-          <dt>HBM / DRAM</dt><dd>Tipos de memória. HBM é a memória de alta banda usada em IA; DRAM é a memória comum.</dd>
-          <dt>z-score</dt><dd>Distância de um valor em relação à média histórica, medida em desvios-padrão.</dd>
-          <dt>Spot</dt><dd>Preço de compra imediata no mercado, sem contrato de longo prazo.</dd>
-        </dl>
-        <p class="muted small">Para auditar pesos, betas e fórmulas, use <a href="/api/methodology">/api/methodology</a>. A documentação da API está em <a href="/docs">/docs</a>.</p>
-      </section>
+    <!-- ============ FONTES ============ -->
+    <section id="tab-fontes" class="tabpanel hidden" role="tabpanel" aria-labelledby="tabbtn-fontes" tabindex="0">
+      <div class="block-head">
+        <h2>Fontes</h2>
+        <p class="muted">Todas as fontes são públicas e nenhuma exige cadastro ou chave.</p>
+      </div>
+      <div class="src-groups" id="sourceGroups">
+        <p class="muted">Aguardando a primeira coleta…</p>
+      </div>
+      <p class="muted small src-foot">
+        As regras de uso de cada fonte e as fontes descartadas estão no arquivo
+        docs/fontes.md, no repositório do projeto.
+      </p>
     </section>
   </main>
 
@@ -591,7 +317,6 @@
     </p>
   </footer>
 
-  <script src="/static/charts.js"></script>
   <script src="/static/icons.js"></script>
   <script src="/static/dashboard.js"></script>
   <script src="/static/prices.js"></script>

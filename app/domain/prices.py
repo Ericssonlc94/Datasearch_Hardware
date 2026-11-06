@@ -129,7 +129,7 @@ CATEGORY_PREFIX: dict[str, tuple[str, ...]] = {
     "psu": ("fonte",),
     "monitor": ("monitor",),
     "console": ("console",),
-    "smartphone": ("smartphone", "celular"),
+    "smartphone": ("smartphone", "celular", "iphone", "apple iphone"),
     "notebook": ("notebook",),
 }
 # E não pode ter, em lugar nenhum do nome, o que costuma vir junto na busca.
@@ -187,16 +187,18 @@ _PS5 = "playstation 5|playstation5|ps5"
 # redirecionada duas vezes).
 BASKET: list[BasketModel] = [
     # GPU — marca entra na visão NVIDIA × AMD; Intel só na faixa.
+    # T35d (06/11): o baixo virou entrada (GTX 1650, RX 6500 XT, RTX 3050,
+    # Arc A380); RTX 3060 e Arc B570 subiram; RX 6600 saiu (a busca só traz PC
+    # montado) e a RTX 4060 saiu para o médio ficar com 5 modelos.
+    _m("gpu", "baixo", "gtx-1650", "GTX 1650 4 GB", "gtx-1650", ("gtx 1650",), ("super",), brand="NVIDIA"),
+    _m("gpu", "baixo", "rx-6500-xt", "RX 6500 XT 4 GB", "rx-6500-xt", ("rx 6500 xt",), brand="AMD"),
     _m("gpu", "baixo", "rtx-3050", "RTX 3050", "rtx-3050", ("rtx 3050",), brand="NVIDIA"),
-    _m("gpu", "baixo", "rx-6600", "RX 6600", "rx-6600", ("rx 6600",),
-       ("6600 xt", "6650"), brand="AMD"),
-    _m("gpu", "baixo", "rtx-3060", "RTX 3060", "rtx-3060", ("rtx 3060",),
+    _m("gpu", "baixo", "arc-a380", "Arc A380", "arc-a380", ("a380",), brand="Intel"),
+    _m("gpu", "medio", "rtx-3060", "RTX 3060", "rtx-3060", ("rtx 3060",),
        ("3060 ti",), brand="NVIDIA"),
-    _m("gpu", "baixo", "arc-b570", "Arc B570", "placa-de-video-arc-b570", ("b570",), brand="Intel"),
+    _m("gpu", "medio", "arc-b570", "Arc B570", "placa-de-video-arc-b570", ("b570",), brand="Intel"),
     _m("gpu", "medio", "rtx-5060", "RTX 5060", "rtx-5060", ("rtx 5060",),
        ("5060 ti",), brand="NVIDIA"),
-    _m("gpu", "medio", "rtx-4060", "RTX 4060", "rtx-4060", ("rtx 4060",),
-       ("4060 ti",), brand="NVIDIA"),
     _m("gpu", "medio", "rx-7600", "RX 7600", "rx-7600", ("rx 7600",),
        ("7600 xt",), brand="AMD"),
     _m("gpu", "medio", "rtx-5060-ti", "RTX 5060 Ti", "placa-de-video-rtx-5060-ti", ("rtx 5060 ti",),
@@ -341,8 +343,9 @@ BASKET: list[BasketModel] = [
        brand="Samsung"),
     _m("smartphone", "alto", "s25", "Galaxy S25", "galaxy-s25", ("galaxy s25",),
        ("fe", "ultra", "plus", "edge"), brand="Samsung"),
-    _m("smartphone", "alto", "iphone-15", "iPhone 15", "iphone-15-128gb", ("iphone 15",), ("pro", "plus"),
-       brand="Apple"),
+    # T35d: iPhone base de 128 GB, sem Pro/Plus/Max/e (pedido do usuário).
+    _m("smartphone", "alto", "iphone-16", "iPhone 16 128 GB", "iphone-16-128gb", ("iphone 16", "128gb"),
+       ("pro", "plus", "max", "16e"), brand="Apple"),
     _m("smartphone", "alto", "edge-60-pro", "Motorola Edge 60 Pro", "smartphone-motorola-edge-60-pro",
        ("edge 60 pro",), brand="Motorola"),
     # Notebook — processador, memória e placa de vídeo são o modelo.
@@ -377,15 +380,28 @@ def expected_bands(category: str) -> tuple[str, ...]:
     return BANDS
 
 
-def display_range(category: str, band: str) -> tuple[float, float | None]:
-    """Faixa de R$ exibida no nível; contígua com a do nível de cima."""
+def curation_range(category: str, band: str) -> tuple[float, float | None]:
+    """Faixa fixa do nível, em R$: só para a curadoria e o filtro do anúncio.
+
+    A tela mostra a faixa observada do dia (`observed_range`), não esta.
+    """
     lo, hi = BAND_RANGES.get(category, {}).get(band, (0.0, None))
     return float(lo), (float(hi) if hi is not None else None)
 
 
+def observed_range(model_prices: dict[str, float | None]) -> tuple[float, float] | None:
+    """Faixa exibida (T35d): menor e maior mediana dos modelos com preço no dia.
+
+    A média da faixa fica sempre dentro dela, mesmo quando o preço anda para
+    fora da faixa fixa da curadoria.
+    """
+    vals = [p for p in model_prices.values() if _finite_positive(p)]
+    return (min(vals), max(vals)) if vals else None
+
+
 def band_filter(category: str, band: str) -> tuple[float, float]:
     """Faixa aceita para o anúncio: a exibida com `BAND_FILTER_MARGIN` de folga."""
-    lo, hi = display_range(category, band)
+    lo, hi = curation_range(category, band)
     top = hi if hi is not None else PLAUSIBLE_BRL[category][1]
     return lo / (1 + BAND_FILTER_MARGIN), top * (1 + BAND_FILTER_MARGIN)
 
@@ -424,12 +440,9 @@ def validate_basket() -> list[str]:
             n = len(models_for(key, band))
             if not lo_n <= n <= hi_n:
                 problems.append(f"{key}/{band}: {n} modelos, esperado de {lo_n} a {hi_n}")
-            hi = display_range(key, band)[1]
+            hi = curation_range(key, band)[1]
             if hi is None or hi > INCOME_CEILING_BRL:
                 problems.append(f"{key}/{band}: teto acima do consumidor médio (R$ 10 mil)")
-        for low, high in zip(bands, bands[1:]):
-            if (display_range(key, low)[1] or 0) > display_range(key, high)[0]:
-                problems.append(f"{key}: faixa exibida de {low} sobrepõe {high}")
     return problems
 
 
@@ -899,7 +912,7 @@ def build_prices_view(
             price = band_price(now)
             band_prices[band] = price
             priced_total += len(now)
-            lo, hi = display_range(cat.key, band)
+            seen = observed_range(now)
 
             models_out, offers = [], []
             for md in mds:
@@ -941,7 +954,8 @@ def build_prices_view(
             entry["tiers"].append({
                 "tier": band,
                 "label": BAND_LABELS[band],
-                "range_brl": {"min": lo, "max": hi},
+                # Faixa observada do dia; sem modelo com preço, sem faixa.
+                "range_brl": {"min": _round(seen[0]), "max": _round(seen[1])} if seen else None,
                 "price_full_brl": _round(price),
                 # À vista só quando todo modelo com preço tem à vista.
                 "price_cash_brl": _round(band_price({md.model.key: md.cash for md in mds if md.cash}))

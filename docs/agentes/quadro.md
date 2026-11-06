@@ -1,7 +1,7 @@
 # Quadro de tarefas
 
 Mantido pelo Coordenador. Status: a fazer · fazendo · pausado · feito · bloqueado · desfeita.
-Atualizado em 2026-11-05 17:45. Suíte: 345 passed.
+Atualizado em 2026-11-06 12:09. Suíte: 345 passed.
 
 ## Em aberto
 
@@ -46,12 +46,15 @@ Atualizado em 2026-11-05 17:45. Suíte: 345 passed.
 | T35e | Dividir a coleta semanal em vários dias (K3) | Dados e modelo | a fazer | depois |
 | T18 | Revisar e commitar (com aprovação) | Coordenador | a fazer | depende de T16, T17 |
 
-## Para retomar (05/11, fim do dia)
+## Para retomar (06/11, fim da tarde)
 
-- App parado. Cache da KaBuM antiga apagado (cópia em data/cache.db.bak-kabum); a coleta da T35 está no data/cache.db.
-- Correção feita pelo Coordenador: prices.py:803 (NameError items) e nota sem {urls} na falha.
-- Suíte: 335 ok + 10 falhas do modelo antigo (QA em standby, por decisão do usuário). Pendentes: 84 ok.
-- Próximos passos: enviar T35b/T35c/T35d (com ok do usuário), testar o app, README (T17) e commit (T18).
+- Feito hoje (frontend): T36–T41 e ajustes diretos do Coordenador. Abas: Visão Geral · Detalhes · Preços · Gráficos · Fontes. A Fila virou a seção "Consumidor vs Datacenter" em Gráficos (investimento em IA + estoque Micron); cards Micron e NVIDIA/AMD/Intel removidos; aba Técnico removida; aba Fontes nova (snap.sources); medidor semicircular na Visão Geral e termômetro de barra em Detalhes; "estimativa nossa" → "estimativa"; #ranking → #priceRanking (corrige a rolagem em Preços); troca de aba volta ao topo.
+- Removidos a pedido: "O efeito no Brasil", "Por que o dólar se mexeu", "Como ler em 30 segundos", glossário, KPI "Dados disponíveis", rodapés do termômetro e textos de Gráficos. Detalhe dos ajustes de layout em frontend.md.
+- Acesso: `tailscale serve` → https://cachyos-x8664.tail240e60.ts.net (só tailnet); local http://127.0.0.1:8000. DSH_ALLOWED_HOSTS inclui o host do tailnet.
+- Notícias: o usuário decidiu não mexer mais (o texto diz 7 dias; os artigos de análise seguem com 30). Explicação do dólar (fx_explanation) segue no backend sem uso na tela.
+- Suíte: test_ui_contract 23 ok + 9 falhas (estrutura antiga: tendência, charts_js, drill-down, visão geral, entenda "estimativa nossa", aba técnico, dashboard seis gráficos, textos catSvg, cartão do dólar). Mais as 10 do modelo antigo. QA em standby; pendências dela: adotar testes-pendentes, aposentar as 10, atualizar as 9, teste de record_model_prices, teste do NameError de prices.py.
+- Decidido manter: run.py na raiz, app/ sem src/, requirements separados. Desvios Clean (Fetched em cache.py; schemas no domínio) aguardam decisão.
+- Próximos: QA (com permissão), compactar Segurança antes de usá-la, T35e (coleta semanal em vários dias), 16 modelos sem preço, commit (T18) feito manualmente pelo usuário.
 
 ## A decidir pelo usuário (04/11, 17:45)
 

@@ -193,13 +193,15 @@ def _row(code, price, name, seller="KaBuM!"):
 def test_visao_por_modelo_com_referencias_e_link_pelo_code():
     f = _fetched({
         "gpu-rtx-3050": [_row("11", 2000.0, "Placa de Vídeo RTX 3050"), _row("12", 2100.0, "Placa de Vídeo RTX 3050")],
-        "gpu-rx-6600": [_row("21", 2400.0, "Placa de Vídeo RX 6600 8GB")],
+        "gpu-rx-6500-xt": [_row("21", 1600.0, "Placa de Vídeo RX 6500 XT 4GB")],
         "gpu-rtx-5060": [_row("31", 3000.0, "Placa de Vídeo RTX 5060")],
     })
     view = P.build_prices_view({"kabum.basket": f}, {}, D0)
     gpu = view["categories"][0]
     baixo = gpu["tiers"][0]
-    assert baixo["price_full_brl"] == pytest.approx((2050.0 + 2400.0) / 2)
+    assert baixo["price_full_brl"] == pytest.approx((2050.0 + 1600.0) / 2)
+    # Faixa exibida = menor e maior mediana do dia (T35d): a média fica dentro.
+    assert baixo["range_brl"] == {"min": 1600.0, "max": 2050.0}
     assert baixo["listings"] == {"tracked": 4, "valid": 2, "unit": "models"}
     assert {"code": "partial", "text": "2 de 4 modelos"} in baixo["warnings"]
     m = next(x for x in baixo["models"] if x["key"] == "gpu-rtx-3050")
@@ -207,7 +209,7 @@ def test_visao_por_modelo_com_referencias_e_link_pelo_code():
     assert all(r["url"] == f"https://www.kabum.com.br/produto/{r['code']}" for r in m["refs"])
     assert gpu["published"] is True
     bv = view["brand_view"]["tiers"][0]
-    assert bv["nvidia"]["price_full_brl"] == 2050.0 and bv["amd"]["price_full_brl"] == 2400.0
+    assert bv["nvidia"]["price_full_brl"] == 2050.0 and bv["amd"]["price_full_brl"] == 1600.0
     assert view["series_values"]["kabum_model.gpu-rtx-3050"] == 2050.0
 
 
@@ -231,10 +233,10 @@ def test_coleta_de_outra_cesta_ou_outro_dia_nao_vira_preco():
 
 def test_coleta_da_semana_vale_e_busca_vazia_e_sem_preco():
     f = _fetched({"gpu-rtx-3050": [_row("11", 2000.0, "Placa de Vídeo RTX 3050")]}, day=D0 - timedelta(days=6))
-    f.payload["models"].append({"key": "gpu-rx-6600", "day": D0.isoformat(), "status": "empty"})
+    f.payload["models"].append({"key": "gpu-arc-a380", "day": D0.isoformat(), "status": "empty"})
     tier = P.build_prices_view({"kabum.basket": f}, {}, D0)["categories"][0]["tiers"][0]
     assert tier["price_full_brl"] == 2000.0
-    assert next(m for m in tier["models"] if m["key"] == "gpu-rx-6600")["status"] == "no_price"
+    assert next(m for m in tier["models"] if m["key"] == "gpu-arc-a380")["status"] == "no_price"
 
 
 def test_variacao_na_visao_usa_o_historico_do_modelo():
@@ -308,7 +310,7 @@ def test_coleta_nao_segue_redirect_e_para_no_desafio(monkeypatch):
             return httpx.Response(200, html=_search_html([
                 {"code": 1, "name": "Placa de Vídeo RTX 3050", "sellerName": "KaBuM!", "price": 2000.0,
                  "available": True}]))
-        if request.url.path.endswith("rx-6600"):
+        if request.url.path.endswith("rx-6500-xt"):
             return httpx.Response(308, headers={"location": "/hardware"})
         if request.url.path.endswith("rtx-3060"):
             return httpx.Response(200, html=EMPTY_HTML)
@@ -321,12 +323,12 @@ def test_coleta_nao_segue_redirect_e_para_no_desafio(monkeypatch):
     async def no_sleep(_):
         return None
 
-    basket = P.models_for("gpu", "baixo")[:3] + P.models_for("gpu", "medio")[:2]
+    basket = [P.BASKET_BY_KEY[k] for k in ("gpu-rtx-3050", "gpu-rx-6500-xt", "gpu-rtx-3060", "gpu-rtx-5060", "gpu-rx-7600")]
     got = asyncio.run(K.fetch_basket(basket=basket, sleep=no_sleep))
     status = [r["status"] for r in got.payload["models"]]
     assert status == ["ok", "redirect", "empty", "not_run", "not_run"]
     assert got.payload["cache_version"] == P.BASKET_VERSION and got.payload["stopped"]
-    assert seen == ["/robots.txt", "/busca/rtx-3050", "/busca/rx-6600", "/busca/rtx-3060",
+    assert seen == ["/robots.txt", "/busca/rtx-3050", "/busca/rx-6500-xt", "/busca/rtx-3060",
                     "/busca/rtx-5060"]
 
 
@@ -345,3 +347,12 @@ def test_tres_buscas_seguidas_sem_lista_param_a_coleta(monkeypatch):
 
     with pytest.raises(K.StoreBlocked):
         asyncio.run(K.fetch_basket(basket=P.models_for("gpu", "medio")[:4], sleep=no_sleep))
+
+
+def test_faixa_exibida_vazia_sem_preco_e_iphone_pelo_nome():
+    view = P.build_prices_view({"kabum.basket": _fetched({})}, {}, D0)
+    assert view["categories"][0]["tiers"][0]["range_brl"] is None
+    iphone = P.BASKET_BY_KEY["smartphone-iphone-16"]
+    assert P.match_name(iphone, "Apple iPhone 16 128GB Preto")
+    assert not P.match_name(iphone, "Apple iPhone 16 Pro 128GB")
+    assert not P.match_name(iphone, "Capa iPhone 16 128GB")

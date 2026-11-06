@@ -15,9 +15,9 @@ tende a subir nos próximos 30 dias, e por quê?**
 
 Ele busca números públicos (dólar, inflação, petróleo, ações de fabricantes de
 chips, investimento em IA, terremotos perto de fábricas, notícias), transforma
-esses números num índice de 0 a 100 e mostra tudo num painel com sete abas.
+esses números num índice de 0 a 100 e mostra tudo num painel com cinco abas.
 Não usa nenhuma chave de API e marca todo número como **dado oficial** ou
-**estimativa nossa**.
+**estimativa**.
 
 Situação em 03/11/2026: 34 de 38 fontes funcionando, cobertura de 92%, índice
 em 56,9.
