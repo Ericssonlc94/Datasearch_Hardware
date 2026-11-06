@@ -337,3 +337,36 @@ Stat for rejeitado, apagamos o código?
 Política de fontes (detalhe em `docs/fontes.md`): sem chave de API; sem
 captcha; identificação honesta; falha sempre visível; respeito aos limites de
 cada fonte; testes sem rede; painel sem etapa de build.
+
+## Como executar e testar
+
+Instale as dependências de `requirements.txt` num ambiente virtual Python e
+rode `python run.py`. O painel abre em `http://127.0.0.1:8000`; a porta muda
+com `DSH_PORT`. A primeira coleta leva de 40 s a 3 min.
+
+Configuração no `.env` (modelo em `.env.example`): `DSH_ENABLE_KABUM=true`
+liga a coleta semanal de preços da KaBuM; `DSH_CONTACT` (opcional) entra no
+User-Agent; fontes individuais podem ser desligadas se a rede bloquear algum
+domínio.
+
+Testes, todos sem rede: instale `requirements-dev.txt` e rode
+`python -m pytest tests/ -q`. Testes ainda não adotados pela QA ficam em
+`docs/agentes/testes-pendentes/`.
+
+### Endpoints
+
+| Rota | Função |
+| --- | --- |
+| `GET /` | Painel |
+| `GET /api/snapshot` | Payload completo |
+| `GET /api/progress` | Progresso da coleta em andamento |
+| `POST /api/refresh` | Nova coleta (não vale para a loja) |
+| `GET /api/health` | Cobertura e fontes degradadas |
+| `GET /api/sources` | Proveniência de cada fonte |
+| `GET /api/supply` | Frentes de oferta (memória, chips, demanda) |
+| `GET /api/prices` | Preços da KaBuM por faixa e IPCA por categoria |
+| `GET /api/methodology` | Pesos, betas e fórmulas, para auditoria |
+| `GET /api/series` | Catálogo do histórico |
+| `GET /api/history` | Histórico das séries (`?range=90d&series=iph,iph_br`) |
+| `GET /api/cache` | Diagnóstico do cache |
+| `GET /docs` | OpenAPI |
