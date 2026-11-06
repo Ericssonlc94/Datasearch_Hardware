@@ -9,7 +9,13 @@ confundidas na apresentação:
 
 `sensitivity_pct` é a amplitude típica de 90 dias da categoria: o quanto o
 preço se move quando os drivers vão de neutro a máximo. Memória oscila muito
-mais que fonte de alimentação, e o modelo precisa refletir isso.
+mais que fonte de alimentação, e o modelo precisa refletir isso. A calibração
+continua em 90 dias; o ranking converte para o horizonte exibido (30 dias) em
+`ranking.HORIZON_DAYS`.
+
+`geopolitica_chips` recebeu 30% do beta que antes ficava todo em
+`alocacao_chips`: o risco de Taiwan e dos controles EUA–China estava embutido
+ali e agora é medido à parte.
 
 `tax_multiplier` é o multiplicador estimado de custo de desembarque no Brasil
 (II + IPI + PIS/COFINS-Importação + ICMS + AFRMM + despesas). São estimativas
@@ -41,11 +47,12 @@ CATEGORIES: list[Category] = [
     Category(
         key="gpu",
         label="Placa de vídeo",
-        icon="🎮",
+        icon="gpu",
         sh6="847330",
         ncms=["84733041", "84733042", "84733043", "84733099"],
         betas={
-            "chip_datacenter": 0.34,
+            "alocacao_chips": 0.24,
+            "geopolitica_chips": 0.10,
             "cambio_br": 0.22,
             "commodities": 0.12,
             "terras_raras": 0.12,
@@ -62,11 +69,12 @@ CATEGORIES: list[Category] = [
     Category(
         key="ram",
         label="Memória RAM",
-        icon="🧠",
+        icon="ram",
         sh6="854232",
         ncms=["85423211", "85423219", "85423221", "85423229", "85423290"],
         betas={
-            "chip_datacenter": 0.40,
+            "alocacao_chips": 0.28,
+            "geopolitica_chips": 0.12,
             "cambio_br": 0.20,
             "ormuz_helio": 0.12,
             "terras_raras": 0.10,
@@ -83,11 +91,12 @@ CATEGORIES: list[Category] = [
     Category(
         key="storage",
         label="Armazenamento (HD/SSD)",
-        icon="💾",
+        icon="storage",
         sh6="847170",
         ncms=["84717011", "84717012", "84717019", "84717032", "84717039", "84717090"],
         betas={
-            "chip_datacenter": 0.30,
+            "alocacao_chips": 0.21,
+            "geopolitica_chips": 0.09,
             "cambio_br": 0.22,
             "terras_raras": 0.16,
             "logistica": 0.12,
@@ -104,11 +113,12 @@ CATEGORIES: list[Category] = [
     Category(
         key="cpu",
         label="Processador",
-        icon="⚙️",
+        icon="cpu",
         sh6="854231",
         ncms=["85423110", "85423120", "85423190"],
         betas={
-            "chip_datacenter": 0.32,
+            "alocacao_chips": 0.22,
+            "geopolitica_chips": 0.10,
             "cambio_br": 0.24,
             "ormuz_helio": 0.14,
             "terras_raras": 0.12,
@@ -125,13 +135,14 @@ CATEGORIES: list[Category] = [
     Category(
         key="motherboard",
         label="Placa-mãe",
-        icon="🔌",
+        icon="motherboard",
         sh6="847330",
         ncms=["84733041", "84733049"],
         betas={
             "cambio_br": 0.24,
             "commodities": 0.22,
-            "chip_datacenter": 0.20,
+            "alocacao_chips": 0.14,
+            "geopolitica_chips": 0.06,
             "ormuz_helio": 0.12,
             "logistica": 0.12,
             "terras_raras": 0.10,
@@ -144,7 +155,7 @@ CATEGORIES: list[Category] = [
     Category(
         key="psu",
         label="Fonte de alimentação",
-        icon="⚡",
+        icon="psu",
         sh6="850440",
         ncms=["85044090", "85044030"],
         betas={
@@ -152,7 +163,8 @@ CATEGORIES: list[Category] = [
             "cambio_br": 0.26,
             "logistica": 0.16,
             "ormuz_helio": 0.08,
-            "chip_datacenter": 0.08,
+            "alocacao_chips": 0.06,
+            "geopolitica_chips": 0.02,
             "terras_raras": 0.08,
         },
         sensitivity_pct=14.0,
@@ -163,12 +175,13 @@ CATEGORIES: list[Category] = [
     Category(
         key="smartphone",
         label="Celular / smartphone",
-        icon="📱",
+        icon="smartphone",
         sh6="851713",
         ncms=["85171331", "85171339", "85171390"],
         betas={
             "cambio_br": 0.26,
-            "chip_datacenter": 0.26,
+            "alocacao_chips": 0.18,
+            "geopolitica_chips": 0.08,
             "terras_raras": 0.16,
             "ormuz_helio": 0.12,
             "commodities": 0.10,
@@ -183,11 +196,12 @@ CATEGORIES: list[Category] = [
     Category(
         key="notebook",
         label="Notebook",
-        icon="💻",
+        icon="notebook",
         sh6="847130",
         ncms=["84713012", "84713019", "84713090"],
         betas={
-            "chip_datacenter": 0.30,
+            "alocacao_chips": 0.21,
+            "geopolitica_chips": 0.09,
             "cambio_br": 0.26,
             "commodities": 0.12,
             "logistica": 0.12,
@@ -203,13 +217,14 @@ CATEGORIES: list[Category] = [
     Category(
         key="monitor",
         label="Monitor",
-        icon="🖥️",
+        icon="monitor",
         sh6="852852",
         ncms=["85285220", "85285290"],
         betas={
             "cambio_br": 0.26,
             "commodities": 0.22,
-            "chip_datacenter": 0.18,
+            "alocacao_chips": 0.13,
+            "geopolitica_chips": 0.05,
             "logistica": 0.16,
             "ormuz_helio": 0.10,
             "terras_raras": 0.08,
@@ -224,11 +239,12 @@ CATEGORIES: list[Category] = [
     Category(
         key="console",
         label="Console de videogame",
-        icon="🕹️",
+        icon="console",
         sh6="950450",
         ncms=["95045000"],
         betas={
-            "chip_datacenter": 0.30,
+            "alocacao_chips": 0.21,
+            "geopolitica_chips": 0.09,
             "cambio_br": 0.26,
             "commodities": 0.12,
             "logistica": 0.12,

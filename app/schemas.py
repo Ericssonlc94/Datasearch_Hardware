@@ -7,13 +7,31 @@ resultado do nosso modelo heurístico e não deve ser lido como previsão valida
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SourceStatus = Literal["ok", "stale", "unavailable", "disabled"]
 ValueKind = Literal["observed", "modeled"]
+
+# Mensagens de falha vão para o painel e para /api/cache. O texto que a fonte
+# devolveu (trecho de HTML, JSON quebrado) é conteúdo de terceiros: fica no log,
+# não na resposta pública.
+_QUOTED_BODY = re.compile(r":\s*(['\"]).*\1\s*$", re.DOTALL)
+PUBLIC_ERROR_MAX = 200
+
+
+def public_error(message: str | None) -> str | None:
+    """Versão de uma mensagem de erro que pode sair na API."""
+    if not message:
+        return message
+    text = _QUOTED_BODY.sub(": [corpo da resposta omitido]", message)
+    text = " ".join(text.split())
+    if len(text) > PUBLIC_ERROR_MAX:
+        text = text[: PUBLIC_ERROR_MAX - 1] + "…"
+    return text
 
 
 class SourceInfo(BaseModel):
@@ -28,6 +46,11 @@ class SourceInfo(BaseModel):
     fetched_at: datetime | None = None
     error: str | None = None
     note: str | None = None
+
+    @field_validator("error")
+    @classmethod
+    def _strip_third_party_body(cls, value: str | None) -> str | None:
+        return public_error(value)
 
 
 class SeriesPoint(BaseModel):
@@ -52,6 +75,16 @@ class Signal(BaseModel):
     )
     weight: float = 1.0
     source_key: str = ""
+    fallback_source: str | None = Field(
+        default=None,
+        description=(
+            "Fonte de reserva (ou cadeia separada por vírgula) usada só quando a "
+            "primária falha. O mesmo choque nunca é somado duas vezes."
+        ),
+    )
+    used_source: str = Field(
+        default="", description="Chave da coleta que efetivamente forneceu a série"
+    )
     status: SourceStatus = "ok"
     series: list[SeriesPoint] = Field(default_factory=list)
 
@@ -69,6 +102,42 @@ class Driver(BaseModel):
     trend: Literal["alta", "estavel", "baixa"] = "estavel"
 
 
+class FxReason(BaseModel):
+    """Uma frase de explicação do movimento do dólar, já com os números."""
+
+    key: str
+    text: str
+
+
+class FxExplanation(BaseModel):
+    """Por que o dólar se mexeu em 30 dias e o impacto no hardware.
+
+    Comparação medida (real contra pares, DXY, juros, VIX, commodities); a
+    parcela "brasileira" é uma decomposição simples, não prova de causa.
+    """
+
+    brl_change_30d_pct: float
+    peers_change_30d_pct: float | None = None
+    peers: dict[str, float] = Field(default_factory=dict)
+    dxy_change_30d_pct: float | None = None
+    domestic_share: float | None = Field(
+        default=None, description="0-1: parte do movimento que não aparece nos pares"
+    )
+    rate_diff_pp: float | None = None
+    rate_diff_change_pp: float | None = None
+    vix: float | None = None
+    vix_change_30d_pct: float | None = None
+    commodities_change_pct: float | None = None
+    price_effect_pct: float
+    tax_multiplier: float
+    landed_per_100usd: float
+    landed_per_100usd_30d_ago: float | None = None
+    reasons: list[FxReason] = Field(default_factory=list)
+    impact_hardware: str
+    impact_market: str
+    kind: ValueKind = "modeled"
+
+
 class BrazilContext(BaseModel):
     """Camada Brasil: câmbio, juro, inflação e carga tributária de importação."""
 
@@ -84,10 +153,18 @@ class BrazilContext(BaseModel):
     fx_passthrough: float = Field(
         description="Repasse assumido do câmbio ao preço final de hardware importado"
     )
+    fx_explanation: FxExplanation | None = None
+    fx_price_effect_30d_pct: float | None = Field(
+        default=None,
+        description=(
+            "Estimativa: quanto a variação do dólar em 30 dias acrescenta ao preço "
+            "do hardware importado (variação × repasse). Modelado, não observado."
+        ),
+    )
 
 
 class CategoryImport(BaseModel):
-    """Dado real de importação (Comex Stat) para a categoria."""
+    """Dado real de importação (UN Comtrade/SECEX ou Comex Stat) para a categoria."""
 
     ncm: str
     ncm_label: str
@@ -96,6 +173,8 @@ class CategoryImport(BaseModel):
     fob_usd_12m: float | None = None
     period: str | None = None
     status: SourceStatus = "unavailable"
+    # Qual fonte preencheu o dado: "UN Comtrade (dado SECEX)" ou "Comex Stat".
+    source: str | None = None
 
 
 class CategoryObservedBR(BaseModel):
@@ -127,8 +206,8 @@ class RankingItem(BaseModel):
 
     # --- modelado ---
     pressure_score: float = Field(description="0-100, exposição ponderada aos drivers")
-    projected_global_90d_pct: float
-    projected_brazil_90d_pct: float
+    projected_global_30d_pct: float
+    projected_brazil_30d_pct: float
     kind: ValueKind = "modeled"
 
     # --- observado ---
@@ -149,6 +228,43 @@ class RankingItem(BaseModel):
     narrative: str = ""
 
 
+class SupplyContext(BaseModel):
+    """Fila do consumidor: datacenter × varejo.
+
+    `capex`, `receita` e `estoque` são observados no XBRL da SEC; a
+    `queue_pressure` é modelada a partir deles. O consumidor doméstico é
+    colocado no fim da fila porque HBM/datacenter consome a mesma capacidade.
+    """
+
+    as_of: datetime | None = None
+    capex_ttm_usd: float | None = None
+    capex_growth_pct: float | None = None
+    chip_revenue_ttm_usd: float | None = None
+    chip_revenue_growth_pct: float | None = None
+    inventory_usd: float | None = None
+    inventory_ratio: float | None = Field(
+        default=None, description="Estoque de memória / receita TTM da Micron"
+    )
+    inventory_ratio_change_pct: float | None = None
+    diversion_index: float | None = Field(
+        default=None, description="z(capex) + z(receita de chips); positivo = desvio para IA"
+    )
+    queue_pressure: float | None = Field(
+        default=None, description="0-100; >50 = consumidor esperando mais na fila"
+    )
+    queue_label: str = "sem dados"
+    queue_note: str = ""
+    comtrade_volume_usd: float | None = None
+    comtrade_volume_change_pct: float | None = None
+    comtrade_unit_value_usd_kg: float | None = None
+    comtrade_year: str | None = None
+    capex_series: list[SeriesPoint] = Field(default_factory=list)
+    inventory_series: list[SeriesPoint] = Field(default_factory=list)
+    comtrade_series: list[SeriesPoint] = Field(default_factory=list)
+    kind: ValueKind = "modeled"
+    coverage: float = 0.0
+
+
 class IndexSummary(BaseModel):
     iph: float = Field(description="Indice de Pressao de Hardware, 0-100")
     iph_label: str
@@ -166,9 +282,16 @@ class Snapshot(BaseModel):
     refresh_seconds: int
     summary: IndexSummary
     drivers: list[Driver]
+    supply: SupplyContext = Field(default_factory=SupplyContext)
     brazil: BrazilContext
     ranking: list[RankingItem]
     sources: list[SourceInfo]
     degraded: list[str] = Field(default_factory=list)
     headlines: list[dict[str, Any]] = Field(default_factory=list)
+    # Preço na KaBuM no formato de GET /api/prices (contrato em
+    # docs/agentes/backend.md §T28c, montado em app/domain/prices.py).
+    prices: dict[str, Any] | None = None
+    # Oferta por frente (memória, lógica, demanda), de app/domain/supply_fronts.py:
+    # {key, label, value, unit, normal: [lo, hi] | null, period, source, status}.
+    supply_fronts: list[dict[str, Any]] = Field(default_factory=list)
     disclaimer: str

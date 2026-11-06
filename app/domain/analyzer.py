@@ -21,16 +21,28 @@ from ..series_utils import (
     clamp,
     compound,
     pct_change,
+    peak_score,
     pressure_score,
+    ratio_series,
     to_points,
+    trailing_mean,
     weighted_mean,
+    window_peak,
+    window_sum,
 )
 from .drivers import DRIVERS, DriverSpec, SignalSpec
+from .supply_fronts import FRONTS_ENABLED, read_front
 
 # Repasse cambial assumido para hardware importado: 85% da variação do dólar
 # chega ao preço de prateleira dentro de um trimestre. Hardware é quase todo
 # importado e o estoque em reais gira rápido, então o repasse é alto.
 FX_PASSTHROUGH = 0.85
+# O trimestre acima vira prazo explícito: no horizonte exibido (30 dias) chega
+# só a fração proporcional do repasse. Até 04/11/2026 os 85% entravam inteiros
+# em 30 dias, e a projeção Brasil ficava em ~9% num mês em que o IPCA de
+# computador, celular e console nunca passou de ~3% em 24 meses (T07).
+FX_PASSTHROUGH_DAYS = 90
+FX_HORIZON_DAYS = 30
 
 
 def _series_from(fetched: Fetched | None, path: str) -> list[Point]:
@@ -45,27 +57,92 @@ def _series_from(fetched: Fetched | None, path: str) -> list[Point]:
 
 
 def build_signal(spec: SignalSpec, collected: dict[str, Fetched]) -> Signal:
-    fetched = collected.get(spec.source)
-    status: SourceStatus = fetched.status if fetched else "unavailable"
-    points = _series_from(fetched, spec.path)
+    """Monta um sinal; a reserva só entra se a fonte primária não tiver série.
 
-    change = pct_change(points, spec.window_days) if points else None
-    if change is not None and spec.invert:
-        change = -change
-    score = pressure_score(change, spec.scale)
+    `fallback_source` aceita uma cadeia separada por vírgula. A primeira fonte
+    com série vence e as demais são ignoradas — o mesmo choque nunca é somado
+    duas vezes, que era o defeito de Brent/cobre/PTAX antes desta fase.
+    """
+    if spec.mode == "front":
+        return _front_signal(spec, collected)
+
+    candidates = [spec.source]
+    if spec.fallback_source:
+        candidates += [s.strip() for s in spec.fallback_source.split(",") if s.strip()]
+
+    fetched: Fetched | None = None
+    used = spec.source
+    points: list[Point] = []
+    for candidate in candidates:
+        candidate_fetched = collected.get(candidate)
+        candidate_points = _series_from(candidate_fetched, spec.path)
+        if candidate_points:
+            fetched, used, points = candidate_fetched, candidate, candidate_points
+            break
+        if fetched is None:
+            fetched = candidate_fetched
+
+    status: SourceStatus = fetched.status if fetched else "unavailable"
+
+    if spec.relative_to and points:
+        # Sem a série de referência não existe razão: o sinal fica vazio em
+        # vez de cair para a série absoluta, que mediria outra coisa.
+        points = ratio_series(points, _series_from(collected.get(spec.relative_to), "points"))
+
+    latest = points[-1][1] if points else None
+    if spec.mode == "peak":
+        change = None
+        latest = window_peak(points, spec.window_days)
+        score = peak_score(latest, spec.threshold, spec.scale)
+    elif spec.mode == "sum":
+        # Contagem líquida de eventos na janela: positivo pressiona, negativo
+        # alivia, zero (nenhum evento) é neutro.
+        change = None
+        latest = window_sum(points, spec.window_days)
+        score = pressure_score(latest, spec.scale)
+    else:
+        basis = trailing_mean(points, spec.smooth_days) if spec.smooth_days else points
+        change = pct_change(basis, spec.window_days) if basis else None
+        if change is not None and spec.invert:
+            change = -change
+        score = pressure_score(change, spec.scale)
 
     return Signal(
         key=spec.key,
         label=spec.label,
         unit=spec.unit,
-        latest=points[-1][1] if points else None,
+        latest=latest,
         change_pct=round(change, 2) if change is not None else None,
         window=f"{spec.window_days}d",
         score=round(score, 1) if score is not None else None,
         weight=spec.weight,
         source_key=spec.source,
+        fallback_source=spec.fallback_source,
+        used_source=used,
         status=status,
         series=to_points(points, limit=180),
+    )
+
+
+def _front_signal(spec: SignalSpec, collected: dict[str, Fetched]) -> Signal:
+    """Sinal de frente de oferta (§T24c): nota pelo z, não pela variação %."""
+    fetched = collected.get(spec.source)
+    reading = read_front(spec.key, collected) if FRONTS_ENABLED else None
+    score = reading.pressure if reading else None
+    return Signal(
+        key=spec.key,
+        label=spec.label,
+        unit=spec.unit,
+        latest=round(reading.value, 2) if reading and reading.value is not None else None,
+        change_pct=None,
+        window=(reading.period or "") if reading else "",
+        score=round(score, 1) if score is not None else None,
+        weight=spec.weight,
+        source_key=spec.source,
+        fallback_source=None,
+        used_source=spec.source,
+        status=fetched.status if fetched else "unavailable",
+        series=to_points(reading.series, limit=180) if reading else [],
     )
 
 
@@ -158,10 +235,28 @@ def build_summary(drivers: list[Driver], brazil: BrazilContext) -> IndexSummary:
     )
 
 
+def fx_price_effect(
+    fx_change_pct: float | None, horizon_days: int = FX_HORIZON_DAYS
+) -> float | None:
+    """Quanto a variação do dólar acrescenta ao preço do importado em `horizon_days`, em %.
+
+    O repasse total (85%) leva um trimestre; dentro do horizonte entra a
+    fração linear `horizon_days / 90`, a mesma regra que converte a
+    sensibilidade de 90 para 30 dias no ranking.
+    """
+    if fx_change_pct is None:
+        return None
+    share = min(1.0, horizon_days / FX_PASSTHROUGH_DAYS)
+    return fx_change_pct * FX_PASSTHROUGH * share
+
+
 def build_brazil(collected: dict[str, Fetched]) -> BrazilContext:
-    ptax = _series_from(collected.get("bcb.ptax_usd"), "points")
-    if not ptax:
-        ptax = _series_from(collected.get("market.usd_brl"), "points")
+    # Cadeia explicitamente ordenada: PTAX oficial → spot → H.10 do Fed.
+    ptax: list[Point] = []
+    for key in ("bcb.ptax_usd", "market.usd_brl", "fred.usd_brl_fed"):
+        ptax = _series_from(collected.get(key), "points")
+        if ptax:
+            break
     ipca = _series_from(collected.get("bcb.ipca"), "points")
     igpm = _series_from(collected.get("bcb.igpm"), "points")
     selic = _series_from(collected.get("bcb.selic_meta"), "points")
@@ -180,4 +275,6 @@ def build_brazil(collected: dict[str, Fetched]) -> BrazilContext:
         ipca_series=to_points(ipca, limit=24),
         usd_brl_series=to_points(ptax, limit=180),
         fx_passthrough=FX_PASSTHROUGH,
+        # Síntese da alta do dólar: a mesma conta que o ranking usa por produto.
+        fx_price_effect_30d_pct=_r(fx_price_effect(pct_change(ptax, 30))),
     )

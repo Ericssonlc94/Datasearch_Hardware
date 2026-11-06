@@ -6,6 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+# Histórico local (SQLite)
+data/
+*.db-wal
+*.db-shm
+
 # Distribution / packaging
 .Python
 build/

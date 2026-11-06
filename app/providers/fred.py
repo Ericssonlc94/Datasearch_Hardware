@@ -92,6 +92,26 @@ SERIES: dict[str, tuple[str, str, str, str]] = {
         "índice",
         "mensal",
     ),
+    # Juro americano, para o diferencial Selic − Fed na explicação do dólar.
+    "fed_funds": (
+        "DFF",
+        "Juro básico dos EUA (Fed funds efetiva)",
+        "% a.a.",
+        "diaria",
+    ),
+    # Frete e tarifa medidos, no lugar da contagem de notícias.
+    "freight_deep_sea": (
+        "PCU483111483111",
+        "PPI EUA — frete marítimo de longo curso",
+        "índice",
+        "mensal",
+    ),
+    "customs_duties": (
+        "B235RC1Q027SBEA",
+        "Arrecadação de tarifas alfandegárias dos EUA (anualizada)",
+        "US$ bi",
+        "trimestral",
+    ),
 }
 
 

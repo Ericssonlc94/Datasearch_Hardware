@@ -32,14 +32,15 @@ DOCS = "https://api-comexstat.mdic.gov.br/docs"
 _CONCURRENCY = 1
 _SPACING_S = 0.5
 
-# O endpoint fica atrás de um WAF que responde 429 a cliente sem contexto de
-# origem. Estes cabeçalhos são os mesmos que o painel oficial do Comex Stat
-# envia — não contornam autenticação nenhuma, só identificam a chamada.
-_HEADERS = {
-    "Origin": "https://comexstat.mdic.gov.br",
-    "Referer": "https://comexstat.mdic.gov.br/",
-    "Accept": "application/json, text/plain, */*",
-}
+# Sem `Origin`/`Referer` forjados: o projeto se identifica apenas pelo
+# User-Agent configurado. Retestado em 04/11/2026 (Cloudflare na frente): os
+# GETs (`/docs`, `/tables/ncm`, `/general/dates/updated`) respondem 200, mas
+# todo POST em `/general` volta 429 "tente novamente em 10 segundos" — inclusive
+# o primeiro após 60 s parado. Não é limite de taxa; é regra de WAF para POST.
+# Substituído pelo preview mensal do UN Comtrade
+# (`comtrade.fetch_monthly_imports`, mesmo formato de payload). Este módulo fica
+# desligado (`enable_comexstat`) e o contrato de `PAYLOAD_VARIANTS` segue sem
+# validação ao vivo.
 
 
 def _period_bounds(months_back: int = 30) -> tuple[str, str]:
@@ -116,7 +117,7 @@ async def fetch_imports(category_key: str, sh6: str, ncms: list[str], label: str
                 # Checado DENTRO do semáforo: as categorias entram em paralelo e
                 # só aqui, em fila, cada uma enxerga as falhas das anteriores.
                 breaker_guard("comexstat")
-                data = await post_json(BASE, payload, headers=_HEADERS)
+                data = await post_json(BASE, payload)
                 await asyncio.sleep(_SPACING_S)
             months = _parse(data)
             breaker_record("comexstat", ok=True)

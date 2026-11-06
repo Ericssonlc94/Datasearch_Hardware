@@ -151,7 +151,7 @@ def test_ranking_ordenado_e_completo():
 
     assert len(ranking) == len(CATEGORIES)
     assert [i.rank for i in ranking] == list(range(1, len(ranking) + 1))
-    valores = [i.projected_brazil_90d_pct for i in ranking]
+    valores = [i.projected_brazil_30d_pct for i in ranking]
     assert valores == sorted(valores, reverse=True), "ranking deve estar em ordem decrescente"
 
     for item in ranking:
@@ -168,13 +168,13 @@ def test_cambio_nao_entra_na_projecao_global():
     r1 = build_ranking(build_drivers(sem_fx), build_brazil(sem_fx), sem_fx)
     r2 = build_ranking(build_drivers(com_fx), build_brazil(com_fx), com_fx)
 
-    g1 = {i.key: i.projected_global_90d_pct for i in r1}
-    g2 = {i.key: i.projected_global_90d_pct for i in r2}
+    g1 = {i.key: i.projected_global_30d_pct for i in r1}
+    g2 = {i.key: i.projected_global_30d_pct for i in r2}
     assert g1 == g2, "câmbio não pode contaminar a projeção global"
 
     # Já a projeção Brasil precisa subir com o dólar.
-    b1 = {i.key: i.projected_brazil_90d_pct for i in r1}
-    b2 = {i.key: i.projected_brazil_90d_pct for i in r2}
+    b1 = {i.key: i.projected_brazil_30d_pct for i in r1}
+    b2 = {i.key: i.projected_brazil_30d_pct for i in r2}
     assert all(b2[k] > b1[k] for k in b1), "alta do dólar deve elevar a projeção Brasil"
 
 
@@ -184,7 +184,7 @@ def test_projecao_brasil_compoe_e_nao_multiplica_por_imposto():
     ranking = build_ranking(build_drivers(collected), build_brazil(collected), collected)
     for item in ranking:
         # Sem pressão global, a projeção Brasil é só o efeito cambial repassado.
-        assert abs(item.projected_brazil_90d_pct) < 20.0
+        assert abs(item.projected_brazil_30d_pct) < 20.0
         # E a carga tributária aparece no impacto absoluto, não no percentual.
         assert item.brl_impact_per_100usd is not None
         assert item.brl_impact_per_100usd > 100.0

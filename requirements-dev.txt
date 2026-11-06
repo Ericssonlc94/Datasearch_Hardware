@@ -1,0 +1,5 @@
+# Dependências de desenvolvimento e teste.
+# O runtime continua com requirements.txt — pytest não entra em produção.
+-r requirements.txt
+
+pytest>=8.0

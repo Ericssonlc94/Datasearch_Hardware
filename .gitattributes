@@ -1,0 +1,11 @@
+# Normaliza o repositório para LF: o checkout original tinha CRLF e gerava um
+# diff fantasma de 4394 linhas sem nenhuma mudança real de conteúdo.
+* text=auto eol=lf
+
+# Artefatos binários nunca passam por normalização de linha.
+*.db binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+app/static/vendor/*.min.js binary

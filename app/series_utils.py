@@ -50,6 +50,73 @@ def value_n_days_ago(pairs: list[Point], days: int) -> float | None:
     return best[1] if best else None
 
 
+def trailing_mean(pairs: list[Point], days: int) -> list[Point]:
+    """Média dos últimos `days` dias corridos em cada ponto (inclusive).
+
+    Para contagem diária de notícias: um dia isolado com pauta forte ou fraca
+    não deve mover o sinal sozinho. Pontos sem data parseável passam intactos.
+    """
+    if days <= 1 or not pairs:
+        return list(pairs)
+    dated = [(_parse_t(t), t, v) for t, v in pairs]
+    if any(d is None for d, _, _ in dated):
+        return list(pairs)
+    out: list[Point] = []
+    start = 0
+    total = 0.0
+    for i, (d, t, v) in enumerate(dated):
+        total += v
+        while dated[start][0].toordinal() <= d.toordinal() - days:
+            total -= dated[start][2]
+            start += 1
+        out.append((t, total / (i - start + 1)))
+    return out
+
+
+def ratio_series(num: list[Point], den: list[Point]) -> list[Point]:
+    """Razão ponto a ponto nas datas presentes nas duas séries."""
+    by_date = {t[:10]: v for t, v in den if v}
+    return [(t, v / by_date[t[:10]]) for t, v in num if t[:10] in by_date]
+
+
+def window_peak(pairs: list[Point], days: int) -> float | None:
+    """Maior valor nos últimos `days` dias, ancorado no último ponto."""
+    if not pairs:
+        return None
+    end = _parse_t(pairs[-1][0][:10])
+    if end is None:
+        return max(v for _, v in pairs[-days:])
+    floor = end.toordinal() - days
+    values = [
+        v for t, v in pairs
+        if (d := _parse_t(t[:10])) is not None and d.toordinal() > floor
+    ]
+    return max(values) if values else None
+
+
+def window_sum(pairs: list[Point], days: int) -> float | None:
+    """Soma dos valores nos últimos `days` dias, ancorada no último ponto."""
+    if not pairs:
+        return None
+    end = _parse_t(pairs[-1][0][:10])
+    if end is None:
+        return sum(v for _, v in pairs[-days:])
+    floor = end.toordinal() - days
+    return sum(
+        v for t, v in pairs
+        if (d := _parse_t(t[:10])) is not None and d.toordinal() > floor
+    )
+
+
+def peak_score(peak: float | None, threshold: float, scale: float) -> float | None:
+    """Pressão 50-100 pelo quanto o pico passou do limiar (nunca alívio)."""
+    if peak is None or not math.isfinite(peak):
+        return None
+    if scale <= 0:
+        return 50.0
+    return 50.0 + 50.0 * math.tanh(max(0.0, peak - threshold) / scale)
+
+
 def pct_change(pairs: list[Point], days: int) -> float | None:
     """Variação percentual na janela de `days` dias corridos."""
     if len(pairs) < 2:
