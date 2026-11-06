@@ -558,3 +558,9 @@ servidor de teste.
 - `history.record_listings`: `own` aceita `seller_expected` (vendedor da curadoria) e, sem ele, a KaBuM. Vendedor diferente do fixado continua com avail=0 e sem preço.
 - pytest: 335 passed, 10 failed (as mesmas falhas esperadas da T30).
 - O teste de regressão `test_historico_grava_preco_do_vendedor_fixado` está pronto em testes-pendentes/test_t30_ligacao.py (feito pelo "dados e modelo"); a QA move para tests/ com a permissão do usuário.
+
+## T35b — coleta nova da KaBuM no coletor (2026-11-06)
+- `_run`: loja passa `version=prices.BASKET_VERSION` ao `get_or_fetch` (cesta nova vence o cache).
+- Saiu `_listing_history` (payload["listings"] não existe mais). Entram `_model_history` (lê `kabum_model.*` dos últimos 60 dias → `model_history` do `build_prices_view`) e `_record_model_prices` (grava os `kabum_model.*` de `series_values` e tira `series_values` da resposta da API; `price.*` seguem pelo `record_snapshot`).
+- history: `record_model_prices(values, day)` e `model_price_history(keys, days)`. `record_listings`/`listing_history` ficam (testes pendentes usam).
+- pytest: 335 passed, 10 failed (as mesmas da T30); testes-pendentes: 86 passed.
