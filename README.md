@@ -1,9 +1,11 @@
 # DataSearch Hardware
 
-Painel web que acompanha **por que o hardware está ficando mais caro no Brasil**
-e **quanto ainda pode subir**. Ele junta dados públicos sobre chips, dólar,
-energia, metais, frete e geopolítica, transforma isso num índice de pressão de
-0 a 100 e estima a alta de preço por tipo de produto nos próximos 30 dias.
+Painel web de **análise de tendência de preços de hardware no Brasil**: indica
+as variações de alta e baixa de preços com base em fatores econômicos e
+geopolíticos. Para isso, são englobados dados públicos sobre chips, dólar,
+energia, metais, frete e geopolítica, transformados num índice de pressão de 0 a 100 (acima de 50, tendência de
+alta; abaixo, de queda) e estima a variação de preço por tipo de produto nos
+próximos 30 dias.
 
 Todas as fontes são públicas. Nenhuma exige cadastro ou chave.
 
@@ -12,12 +14,13 @@ Todas as fontes são públicas. Nenhuma exige cadastro ou chave.
 ## O que o painel responde
 
 - **Os preços vão subir ou cair?** O Índice de Pressão de Hardware (IPH) resume
-  a pressão em um número de 0 a 100, com uma versão própria para o Brasil, que
+  a tendência em um número de 0 a 100, com uma versão própria para o Brasil, que
   inclui o efeito do dólar e da importação.
-- **Por quê?** Sete fatores explicam a pressão: alocação de chips entre
+- **Por quê?** Sete fatores explicam a tendência, cada um podendo pressionar
+  para cima ou aliviar: alocação de chips entre
   datacenter e consumidor, dólar, Estreito de Ormuz e hélio, terras raras,
   metais e energia, frete e tarifas, e a disputa EUA–China por chips em Taiwan.
-- **O que fica mais caro?** Um ranking estima a alta em 30 dias para placa de
+- **O que deve subir ou cair?** Um ranking estima a variação em 30 dias para placa de
   vídeo, memória, armazenamento, processador, placa-mãe, fonte, celular,
   notebook, monitor e console.
 - **Quanto custa hoje?** Preços reais da KaBuM por faixa (baixo, médio e alto)
@@ -28,12 +31,12 @@ Todas as fontes são públicas. Nenhuma exige cadastro ou chave.
 
 | Aba | Para quê |
 | --- | --- |
-| **Visão Geral** | Leitura de um minuto: a pressão de hoje, os fatores que mais pesam e os produtos com maior alta estimada. |
+| **Visão Geral** | Leitura de um minuto: a pressão de hoje, os fatores que mais pesam e os produtos com maior variação estimada. |
 | **Detalhes** | Cada fator explicado, com os sinais que o compõem, o dólar, a inflação de eletrônicos e as manchetes relevantes. |
 | **Gráficos** | Gráficos interativos da pressão, dos fatores e das estimativas por produto. |
 | **Evolução** | O histórico de cada número ao longo do tempo. |
 | **Fila** | Se o consumidor está no fim da fila: investimento em IA, receita dos fabricantes de chips e estoque de memória e de chips. |
-| **Preços** | **Produtos**: a alta estimada por categoria. **Produtos no mercado**: o preço atual na KaBuM por faixa, com até 3 anúncios de referência por modelo. |
+| **Preços** | **Produtos**: a variação estimada por categoria. **Produtos no mercado**: o preço atual na KaBuM por faixa, com até 3 anúncios de referência por modelo. |
 | **Técnico** | Metodologia, pesos, fórmulas e o estado de cada fonte, para quem quer auditar. |
 
 O painel se atualiza sozinho a cada 15 minutos. Os preços da loja são lidos
