@@ -30,7 +30,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-.claudeskills/
+.claude/
 
 
 # PyInstaller
