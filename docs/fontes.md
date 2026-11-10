@@ -38,7 +38,7 @@ no cache: HTML de bloqueio nunca é promovido a dado.
 | `ibge.ipca_hardware` | IBGE/SIDRA 7060 | JSON | IPCA por subitem |
 | `fred.*` | FRED `fredgraph.csv` | CSV | 14 séries |
 | `market.*` | Yahoo Finance chart v8 | JSON | 16 tickers |
-| `comtrade.*` | UN Comtrade preview | JSON | 1 período por chamada |
+| `comtrade.*` | UN Comtrade preview | JSON | 1 período por chamada; 1 pedido por vez; por ciclo só o último ano (anual) e a cauda de 3 meses (mensal), o resto vem do cache; 429/403 param o ciclo pelo `Retry-After` (T42b/c) |
 | `sec.*` | SEC EDGAR XBRL `companyconcept` | JSON | 5 hyperscalers + NVDA/MU/AMD/INTC; 24 h de TTL |
 | `fedreg.bis_chip_rules` | Federal Register API v1 (regras do BIS) | JSON | sentido lido no título; cache de 6 h |
 | `usgs.fab_quakes` | USGS FDSN Event API | GeoJSON | magnitude ≥ 5,5 a até 150 km de polos de chips; cache de 6 h |

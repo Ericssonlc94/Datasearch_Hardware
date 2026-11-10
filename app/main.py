@@ -157,6 +157,7 @@ async def _refresh_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _snapshot
     try:
         await asyncio.to_thread(history.init_db)
         await asyncio.to_thread(history.purge)
@@ -172,6 +173,22 @@ async def lifespan(app: FastAPI):
         log.info("cache: %d entrada(s) carregada(s) de %s", loaded, settings.cache_file)
     except Exception:  # noqa: BLE001 — sem cache em disco, a coleta só demora mais
         log.exception("cache em disco indisponível; começando vazio")
+
+    # T43: com cache em disco, monta o snapshot de partida sem rede e o serve
+    # já marcado como desatualizado. Sem isso, a página ficaria presa na tela
+    # de carregamento pelo tempo da coleta inteira (9 min com cache de 4 dias).
+    try:
+        cached_snapshot = await collector.build_cached_snapshot()
+    except Exception:  # noqa: BLE001 — o start nunca depende disso
+        log.exception("falha ao montar o snapshot do cache; seguindo para a coleta")
+        cached_snapshot = None
+    if cached_snapshot is not None:
+        _snapshot = cached_snapshot
+        log.info(
+            "snapshot de partida do cache — dados de %s, cobertura %.0f%%",
+            cached_snapshot.generated_at.isoformat(),
+            cached_snapshot.summary.coverage * 100,
+        )
 
     task: asyncio.Task | None = None
     if settings.autorefresh:
@@ -276,7 +293,10 @@ _MAX_SERIES_PER_CALL = 12
 async def snapshot() -> Snapshot:
     """Payload completo do painel, sem efeito colateral.
 
-    Só coleta se ainda não houver snapshot; forçar coleta é `POST /api/refresh`.
+    Com snapshot em memória — inclusive o montado do cache em disco no start,
+    marcado `stale` — responde na hora. Só espera coleta quando não há nada
+    para servir; se essa coleta falhar, devolve 503. Forçar coleta é
+    `POST /api/refresh`.
     """
     if _snapshot is None:
         return await _snapshot_or_503()
@@ -476,8 +496,17 @@ async def health() -> JSONResponse:
     except Exception:  # noqa: BLE001 — saúde não pode falhar por causa do histórico
         history_last = None
 
+    # T43: `stale` é o snapshot do cache em disco, servido antes de a coleta
+    # nova terminar; o painel está no ar, mas os números são os antigos.
+    if snap is None:
+        status = "warming"
+    elif snap.stale:
+        status = "stale"
+    else:
+        status = "ok"
     body = {
-        "status": "ok" if snap is not None else "warming",
+        "status": status,
+        "stale": bool(snap is not None and snap.stale),
         "version": __version__,
         "generated_at": snap.generated_at.isoformat() if snap else None,
         "coverage": snap.summary.coverage if snap else None,

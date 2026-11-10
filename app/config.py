@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 import re
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic import model_validator
@@ -44,6 +46,14 @@ class Settings(BaseSettings):
     # Timeout e retentativas por requisição HTTP externa.
     http_timeout: float = 20.0
     http_retries: int = 2
+    # Teto de tempo por provider, em segundos, no formato "nome=segundos,...".
+    # O global acima vale para quem não está listado. O Comtrade responde em
+    # ~18 s por pedido — perto do global — e é cortado no meio da resposta se
+    # usar o mesmo teto; por isso tem um próprio, maior.
+    http_timeout_providers: str = "comtrade=60"
+    # Providers que não repetem o pedido quando o teto de tempo estoura: a
+    # nova tentativa soma a mesma espera e costuma estourar de novo.
+    http_no_retry_timeout: str = "comtrade"
     # Contato real do responsável (e-mail ou URL do repositório), definido pelo
     # usuário. Vai no User-Agent; sem ele, nenhuma fonte de loja liga (K7).
     contact: str = ""
@@ -103,6 +113,18 @@ class Settings(BaseSettings):
         return _resolve(self.history_path)
 
     @property
+    def http_timeout_by_provider(self) -> dict[str, float]:
+        """Teto próprio de cada provider; quem não está aqui usa `http_timeout`."""
+        return dict(_pairs(self.http_timeout_providers))
+
+    def http_timeout_for(self, provider: str) -> float:
+        return self.http_timeout_by_provider.get(provider, self.http_timeout)
+
+    def retries_on_timeout_for(self, provider: str) -> bool:
+        """`False` para provider que não deve repetir um pedido que estourou."""
+        return provider not in _names(self.http_no_retry_timeout)
+
+    @property
     def kabum_enabled(self) -> bool:
         """Contato no User-Agent é opcional (decisão do usuário, 05/11)."""
         return self.enable_kabum
@@ -143,6 +165,21 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _provider_timeouts_are_valid(self) -> "Settings":
+        """`DSH_HTTP_TIMEOUT_PROVIDERS` inválido falha no start, não no meio da coleta."""
+        try:
+            pairs = _pairs(self.http_timeout_providers)
+        except ValueError as exc:
+            raise ValueError(f"DSH_HTTP_TIMEOUT_PROVIDERS inválido: {exc}") from None
+        for name, seconds in pairs:
+            if not name or not math.isfinite(seconds) or seconds <= 0:
+                raise ValueError(
+                    "DSH_HTTP_TIMEOUT_PROVIDERS precisa ser 'provider=segundos' "
+                    f"com segundos > 0 (recebido: {self.http_timeout_providers!r})"
+                )
+        return self
+
     @property
     def allowed_host_list(self) -> list[str]:
         hosts = [h.strip() for h in self.allowed_hosts.split(",") if h.strip()]
@@ -154,6 +191,29 @@ class Settings(BaseSettings):
 def _resolve(path: str) -> Path:
     p = Path(path)
     return p if p.is_absolute() else _PROJECT_ROOT / p
+
+
+@lru_cache(maxsize=8)
+def _pairs(raw: str) -> tuple[tuple[str, float], ...]:
+    """Lê `"nome=segundos,nome=segundos"`; valor fora de número vira ValueError."""
+    out: list[tuple[str, float]] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        name, sep, value = part.partition("=")
+        if not sep:
+            raise ValueError(f"{part!r} não está no formato provider=segundos")
+        try:
+            out.append((name.strip(), float(value)))
+        except ValueError:
+            raise ValueError(f"{part!r} não tem segundos numéricos") from None
+    return tuple(out)
+
+
+@lru_cache(maxsize=8)
+def _names(raw: str) -> frozenset[str]:
+    return frozenset(part.strip() for part in raw.split(",") if part.strip())
 
 
 settings = Settings()

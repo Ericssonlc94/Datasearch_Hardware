@@ -294,4 +294,9 @@ class Snapshot(BaseModel):
     # Oferta por frente (memória, lógica, demanda), de app/domain/supply_fronts.py:
     # {key, label, value, unit, normal: [lo, hi] | null, period, source, status}.
     supply_fronts: list[dict[str, Any]] = Field(default_factory=list)
+    # T43: `True` quando o payload saiu do cache em disco no start, sem coleta
+    # nova. Os números são os últimos que chegaram (`generated_at`), não deste
+    # ciclo; a coleta em background substitui o snapshot quando termina.
+    stale: bool = False
+    stale_reason: str | None = None
     disclaimer: str

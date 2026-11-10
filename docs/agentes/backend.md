@@ -1,5 +1,64 @@
 # Relatório — Backend
 
+## T43 — snapshot do cache no start e timeout por provider (2026-11-10)
+
+Arquivos: `app/main.py`, `app/services/collector.py`, `app/config.py`,
+`app/schemas.py`, `.env.example`.
+
+### Snapshot de partida sem rede (feito)
+
+- `collector.build_cached_snapshot()` lê `cache.peek()` de cada job de
+  `_tasks()` — sem rede — e monta o `Snapshot` no `lifespan`, logo após
+  `cache.load`. `/api/snapshot` passa a responder na hora, mesmo com o cache
+  vencido; a coleta em background substitui o objeto quando termina.
+- Marcação: campo aditivo `stale: bool` e `stale_reason: str | None` no
+  `Snapshot`; `generated_at` recebe o `fetched_at` mais novo do cache (idade do
+  dado, não a hora da leitura). `/api/health` devolve `status: "stale"` e
+  `"stale": true`, mantendo HTTP 200.
+- Fonte com valor fora do TTL entra como `status="stale"` (nota "valor do
+  cache em disco; fora do prazo"), então `degraded` mostra o que está velho.
+- Piso: só monta se ao menos 50% das fontes (`CACHE_SNAPSHOT_MIN_SHARE`) têm
+  valor no cache; abaixo disso o índice sairia de quase nada e vale mais
+  esperar a coleta. Sem cache, nada muda: `/api/snapshot` espera a 1ª coleta e
+  devolve 503 se ela falhar (tela de carregamento preservada).
+- Não grava histórico, preço de loja nem cache: é só leitura.
+
+### Timeout por provider (parcial — precisa de `app/http.py`)
+
+- `settings.http_timeout_providers` (`DSH_HTTP_TIMEOUT_PROVIDERS`, padrão
+  `comtrade=60`) e `settings.http_timeout_for(provider)`;
+  `settings.http_no_retry_timeout` (`DSH_HTTP_NO_RETRY_TIMEOUT`, padrão
+  `comtrade`) e `settings.retries_on_timeout_for(provider)`. Valor inválido
+  falha no start.
+- Falta o consumo: `http._request` ainda usa `settings.http_timeout` fixo e
+  repete em `TimeoutError` para todo provider. Pedido ao Dados em
+  `docs/agentes/dados.md`/retorno ao Coordenador.
+
+### Medição (cache de 06/11, 59 entradas, `DSH_AUTOREFRESH=false`)
+
+- `GET /api/snapshot`: 200 em 0,042 s, `stale: true`, `generated_at`
+  2026-11-06T18:55:55Z, 58 fontes em `degraded`.
+- Cache fresco: 200 em 0,040 s; `/api/health` `status: "stale"`.
+- Coleta simulada depois do start: snapshot novo com `stale: false` e
+  `/api/health` `status: "ok"`.
+
+### Testes
+
+- `python -m pytest tests/ -q`: 326 passaram, 19 falharam — todas as 19 já
+  falham no HEAD (`git worktree` de 291be2d): fila/`model_breaks` (Modelo) e
+  contrato visual (Frontend). Nenhuma em arquivo desta função.
+- `tests/test_api_security.py -k "snapshot or refresh or coleta"`: 9 passaram,
+  1 falha (a de `model_breaks`, já vermelha no HEAD).
+
+### Pedidos
+
+- **Dados** (`app/http.py`): usar `settings.http_timeout_for(provider)` no
+  `_total_timeout`/`build_client` e não repetir `TimeoutError` quando
+  `settings.retries_on_timeout_for(provider)` for falso; `comtrade._get`
+  precisa informar `provider="comtrade"` (ou `timeout=60`).
+- **Frontend**: mostrar aviso quando `snapshot.stale` (ex.: "dados de
+  <generated_at>, coleta em andamento") em vez de só a data.
+
 ## T10 — `/api/refresh` e achados S2, S6, S7, S8 (2026-11-04)
 
 Arquivos: `app/main.py`, `app/config.py`, `app/schemas.py`, `.env.example`.

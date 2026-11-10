@@ -1233,3 +1233,113 @@ só nesta rodada.
   R$ 1.819,15 (RTX 3050 R$ 2.222,21 e RX 6500 XT R$ 1.416,10), na faixa
   exibida de 1.416 a 2.222.
 - **Pendência**: GTX 1650 e Arc A380 sem preço.
+
+## T42 — Comtrade mensal: cauda de 3 meses, paralela e com meses fechados no cache (10/11/2026): **feito**
+
+1ª coleta de 10/11 levou 9 min 05 s; `comtrade_monthly.console` segurou 6 min
+porque `_monthly_batch` pedia 16 meses em fila a 18,2 s por pedido.
+
+### O que mudou (`app/providers/comtrade.py`, `app/http.py`)
+
+- `_TAIL_MONTHS = 3`: a cada ciclo só a cauda é pedida — 2 meses de defasagem
+  de publicação + 1 de revisão. `_MONTHS_BACK` continua 16: define a janela da
+  série devolvida, não o que se pede à API.
+- Meses fechados vêm de `_previous_months(category_key)`, que lê
+  `cache.peek("comtrade_monthly.<categoria>")` — inclusive entrada vencida,
+  porque mês fechado não muda. A persistência é a própria `cache.db` que o
+  coletor já grava; não precisou de API nova em `app/cache.py`. Só os meses
+  anteriores à cauda são aproveitados; os da cauda são sempre re-pedidos.
+  Mês fechado que falhou não fica em lugar nenhum, então é tentado de novo.
+- Lote em paralelo: `asyncio.gather` sobre os períodos pedidos, com
+  `_CONCURRENCY = 3` no semáforo `comtrade` (antes 1). Mesmo endpoint, mesmos
+  parâmetros, mesmo User-Agent; sem `Origin`/`Referer`.
+- Memo mantido por (último mês, SH6, períodos pedidos); falha não é
+  memorizada.
+- `http.limiter` passou a recriar o semáforo quando o event loop muda:
+  `asyncio.Semaphore` preso a um loop fechado levanta `RuntimeError` ao ser
+  disputado no loop seguinte (um `asyncio.run` por teste). Sem isso, 3 vagas
+  com 16 pedidos travariam a suíte.
+
+### Verificação
+
+- `python -m pytest tests/test_comtrade_monthly.py tests/test_http_defenses.py
+  tests/test_http_challenge.py -q` → 59 passed. Suíte inteira: **325 passed,
+  19 failed, 1 deselected**; as 19 falhas são as mesmas de antes da mudança
+  (Modelo/Frontend em andamento, conferidas com `git stash`).
+- Restart simulado, duas execuções com `cache.db` em `/tmp`: processo frio
+  **16 pedidos** (13 fechados + 3 da cauda); processo novo com o `cache.db`
+  gravado **3 pedidos** (`202608`, `202609`, `202610`) e série **idêntica**
+  (14 meses, 2025-07 → 2026-08; 2026-09/10 vazios por não publicados).
+- Lote com a latência real medida (18,2 s por pedido, rede falsa): **18,2 s**
+  para os 3 pedidos da cauda; em fila seriam 54,6 s.
+- **Risco:** 3 pedidos simultâneos ao preview não foram testados ao vivo
+  (cota do Comtrade). Se aparecer 429 recorrente, baixar `_CONCURRENCY` para 2
+  — o disjuntor de cota (403) continua valendo.
+- **Pendência de outro dono:** `tests/test_collector_comtrade.py::test_collect_com_fetchers_simulados_entrega_10_chaves`
+  trava a suíte (não termina em 90 s) **também no código anterior à mudança**;
+  reproduzido com `git stash`. Precisa da QA.
+
+## T42b, T42c, T43b e T45 — 10/11/2026
+
+**Causa dos 79 pedidos (teste 12:06).** O memo do lote mensal tinha os
+períodos pedidos na chave: categorias com meses fechados diferentes no cache
+viravam lotes separados. E a falha não era guardada, então cada 429 era
+repetido pela categoria seguinte (com o retry do http.py, 2 pedidos por
+período). A série anual somava mais 16 pedidos (4 anos × 4 SH).
+
+**T42b — mensal.** `_CONCURRENCY = 1`. O ciclo (`_MonthlyCycle`, em
+`_monthly_memo`) guarda por período o resultado bom ou a falha por
+`_CYCLE_S` = 15 min: cada período sai no máximo uma vez por ciclo para as 9
+categorias. 403, 429 ou disjuntor aberto param o ciclo todo. 429 abre o
+disjuntor `comtrade` pelo `Retry-After` (piso 5 s, padrão 60 s, teto 6 h); o
+http.py já espera o `Retry-After` (até 30 s) e repete uma vez antes disso.
+Com cache quente: 3 pedidos no total (teste
+`test_cache_quente_nove_categorias_fazem_tres_pedidos`).
+
+**T42c — anual.** `fetch_flow` lê os anos de `cache.peek("comtrade.<key>")`
+(mesmo vencido, mesmo SH e reporter) e só pede o último ano completo
+(`_TAIL_YEARS = 1`) e os anos que faltam. Ano da cauda que volta vazio mantém
+o valor anterior. Com cache: 4 pedidos por ciclo em vez de 16. O payload
+ganhou `reporter`. Os SH não foram juntados numa chamada só porque isso só
+foi confirmado ao vivo no endpoint mensal.
+
+**T43b — http.py.** `get_json/get_text/post_json(..., provider=)`: usa
+`settings.http_timeout_for(provider)` quando o pedido não traz `timeout`, e
+não repete tempo esgotado (`TimeoutError` do teto total ou
+`httpx.TimeoutException` de fase) quando `retries_on_timeout_for` é falso.
+`comtrade._get` passa `provider="comtrade"`.
+
+**T45 — KaBuM (medido, não alterado).** 112 pedidos = 1 robots + 111 buscas,
+uma por modelo da cesta T35 (desenho aprovado: busca limpa por modelo). Cada
+pedido custa a pausa de 3–5 s (média 4 s) mais ~0,3 s de resposta: 8 min, e
+~93% é a pausa obrigatória da regra K3. Paralelismo fere a K3 ("um por vez")
+e não foi feito. Opções para o usuário decidir:
+- A. Pausa fixa de 3 s (dentro da K3): ~6 min (−25%).
+- B. Cesta em rodízio de 3 dias, ~37 buscas por dia (cabe no teto K3 de
+  40/dia): ~2,7 min por dia; cada modelo renovado a cada 3 dias, dentro da
+  validade de 8 dias. Exige TTL diário no collector (Backend) e mesclar a
+  coleta nova com a anterior no provider (Dados).
+- C. 2 buscas simultâneas: ~4 min, mas muda a K3 (precisa do usuário e da
+  Segurança).
+- Em qualquer caso, a coleta da loja não deveria segurar o ciclo (Backend,
+  coleta em segundo plano da T43).
+Ponto aberto: a rodada semanal inteira (112 pedidos) já passa do teto de
+40/dia da K3; a liberação foi só para 05/11.
+
+**Incidente — coleta real durante os testes.** O `.env` tem
+`DSH_ENABLE_KABUM=true`, e
+`tests/test_collector_comtrade.py::test_collect_com_fetchers_simulados_entrega_10_chaves`
+roda `collector.collect()` sem desligar a KaBuM nem a TWSE. É essa a causa do
+"trava a suíte" anotado na T42: o teste faz a coleta real da loja (pausa de
+3–5 s por busca). Hoje, rodando a suíte, isso gerou buscas reais à KaBuM (três
+execuções, duas sobrepostas, interrompidas; estimativa de até ~100 buscas,
+sem contagem exata) e pedidos à TWSE. Desde então rodo os testes com
+`DSH_ENABLE_KABUM=false DSH_ENABLE_TSMC=false`. Correção fica com a QA:
+desligar as lojas nesse teste (ou num conftest).
+
+**Testes.** `docs/agentes/testes-pendentes/test_comtrade_t42b.py` (16, passam).
+`tests/` com as lojas desligadas: 325 passam, 20 falham; só
+`test_comtrade_monthly.py::test_falha_total_nao_fica_no_memo` é desta tarefa
+(a regra mudou de propósito; o teste novo `test_falha_total_fica_no_ciclo_e_vence_depois`
+o substitui). As outras 19 (api_security, backfill, queue_model, supply,
+ui_contract) estão fora destes arquivos. Pendentes: 103 passam.

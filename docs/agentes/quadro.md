@@ -1,7 +1,7 @@
 # Quadro de tarefas
 
 Mantido pelo Coordenador. Status: a fazer · fazendo · pausado · feito · bloqueado · desfeita.
-Atualizado em 2026-11-06 12:09. Suíte: 345 passed.
+Atualizado em 2026-11-10 15:00. Suíte: 325 passed / 20 failed (10/11, com DSH_ENABLE_KABUM=false DSH_ENABLE_TSMC=false).
 
 ## Em aberto
 
@@ -44,7 +44,30 @@ Atualizado em 2026-11-06 12:09. Suíte: 345 passed.
 | T35c | Busca 200 sem lista = 'sem anúncio' sem parar a coleta; coletar os 12 modelos que faltaram; RX 6600 (termo novo ou substituto AMD) | Dados e modelo | a fazer | aguarda ok do usuário |
 | T35d | Confirmar tela no formato novo (tier.models[]) | Frontend | a fazer | aguarda ok do usuário |
 | T35e | Dividir a coleta semanal em vários dias (K3) | Dados e modelo | a fazer | depois |
+| T42 | Comtrade mensal: cauda de 3 meses, paralelo e meses fechados no cache | Dados | feito | 10/11; restart frio 16 pedidos, quente 3 (só a cauda; meses fechados do cache.db); _CONCURRENCY 3 (baixar p/ 2 se 429); antes: 1ª coleta levou 9 min 05 s, comtrade_monthly segurou 6 min; 16 pedidos seriais, 18,2 s cada, timeout 20 s + 2 retries; série devolvida continua até 16 meses |
+| T43 | /api/snapshot não espera a 1ª coleta: snapshot do cache + coleta em background; timeout por provider | Backend | feito | 10/11; cache.db de 06/11 deixou a tela de carregamento 9 min; cache.peek lê sem TTL; campo aditivo de "desatualizado" |
+| T44 | Timer diário de aquecimento da coleta | infraestrutura | standby | 10/11; só quando sair do host local (decisão do usuário) |
+| T42b | Comtrade mensal: falha do lote memorizada no ciclo (1 lote, ≤3 pedidos); _CONCURRENCY 1 + Retry-After no 429 | Dados | feito | teste 14:40 (KaBuM off): Comtrade 16 pedidos em 28 s, 0 falha; 10/11; teste 12:06: 79 pedidos ao Comtrade em vez de 3, 429 em 5 de 9 categorias (ficaram stale, 14 meses preservados) |
+| T42c | Comtrade anual (fetch_flow): anos fechados do cache, só o ano corrente pedido | Dados | feito | 10/11; 4 anos × 4 SH = 16 pedidos por ciclo |
+| T43b | http.py: timeout por provider (http_timeout_for) e sem retry em TimeoutError quando retries_on_timeout_for=False | Dados | feito | 10/11; pedido do Backend na T43 |
+| T43c | Aviso na tela quando snapshot.stale, com generated_at | Frontend | a fazer | 10/11; pedido do Backend na T43; aguarda ok do usuário |
+| T46 | Testes sem rede: desligar lojas/TWSE em test_collect_com_fetchers_simulados_entrega_10_chaves (fazia buscas reais na KaBuM e travava a suíte); trocar test_falha_total_nao_fica_no_memo pelo de testes-pendentes/test_comtrade_t42b.py | QA | a fazer | 10/11; incidente achado pelo Dados; aguarda permissão do usuário |
+| T45 | KaBuM: 112 buscas seriais (~4 s cada) seguram a coleta em 8,5 min; medir e propor paralelismo limitado ou intervalo próprio | Dados | aguarda usuário | 10/11; Comtrade 47 s, TWSE 1,5 min, KaBuM 12:06→12:14 |
 | T18 | Revisar e commitar (com aprovação) | Coordenador | a fazer | depende de T16, T17 |
+
+## Para retomar (10/11, 15:00)
+
+- Painéis voltaram ao Claude Code (ver registro.md): Dados t1, Backend t2, Modelo t3, Frontend t6, QA t7, Segurança t12; todos ociosos. Coordenador t10.
+- Comtrade (T42/T42b/T42c): pede só os 3 últimos meses + o ano corrente; meses/anos fechados vêm do cache.db. Teste ao vivo 14:40 (cópia dos bancos, KaBuM off): 16 pedidos em 28 s, 0 falha (antes 95 pedidos, 5 de 9 categorias com 429). Coleta inteira 107 s; gargalo agora TWSE (48 pedidos, 1,5 min).
+- Frequência: Comtrade/TSMC/IPCA TTL 24 h; KaBuM 7 dias (terças); séries diárias 6 h; câmbio/bolsa 15 min. Reiniciar o app não refaz busca dentro do prazo (snapshot do cache na partida + coleta em background só do que venceu).
+- Limpeza feita a pedido: backup em data/backup-2026-11-10/; apagada a coleta das 14:51 UTC do history.db (84 linhas); as 59 entradas do cache.db foram vencidas (depois o servidor coletou de novo).
+- Servidor principal: PID 50180, porta 8000, iniciado pelo Coordenador às 12:06 com o código antigo (antes de T42b/c/T43b) e DSH_ENABLE_KABUM=true; log em scratchpad da sessão. Antes rodava no pts/10.
+- KaBuM hoje passou do teto K3 (40/dia): ~100 buscas dos testes do Dados + 112 da coleta das 12:06.
+- A decidir pelo usuário:
+  1. T45 KaBuM: pausa fixa 3 s (~6 min) · rodízio em 3 dias (~37/dia, ~2,7 min, cabe no K3; recomendado; Backend TTL diário + Dados mescla) · 2 simultâneas (~4 min, muda K3). Detalhe em dados.md.
+  2. T46 (QA) e T43c (Frontend): enviar?
+  3. Reiniciar o servidor principal com o código novo e DSH_ENABLE_KABUM=false até decidir a T45?
+- Pendente antigo: Selic (bcb.selic_meta) falha em toda coleta com redirect 304.
 
 ## Para retomar (06/11, fim da tarde)
 

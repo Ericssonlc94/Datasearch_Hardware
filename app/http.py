@@ -179,7 +179,7 @@ async def check_redirect(resp: httpx.Response) -> None:
         )
 
 
-_limiters: dict[str, asyncio.Semaphore] = {}
+_limiters: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Semaphore]] = {}
 
 
 def limiter(name: str, concurrency: int) -> asyncio.Semaphore:
@@ -187,11 +187,20 @@ def limiter(name: str, concurrency: int) -> asyncio.Semaphore:
 
     Comex Stat e UN Comtrade devolvem 429 quando recebem uma rajada paralela.
     Coletar essas fontes em fila é mais rápido do que apanhar do rate limit.
+
+    O semáforo fica preso ao event loop que o criou: `asyncio.Semaphore`
+    levanta `RuntimeError` se for disputado a partir de outro loop. Por isso
+    um loop novo (um `asyncio.run` por teste, por exemplo) ganha semáforo
+    novo em vez de herdar um que já não pode ser usado.
     """
-    sem = _limiters.get(name)
-    if sem is None or sem._value > concurrency:  # noqa: SLF001
-        sem = asyncio.Semaphore(concurrency)
-        _limiters[name] = sem
+    loop = asyncio.get_running_loop()
+    current = _limiters.get(name)
+    if current is not None and current[0] is loop:
+        sem = current[1]
+        if sem._value <= concurrency:  # noqa: SLF001
+            return sem
+    sem = asyncio.Semaphore(concurrency)
+    _limiters[name] = (loop, sem)
     return sem
 
 
@@ -325,8 +334,22 @@ def _total_timeout(kw: dict[str, Any]) -> float:
 
 
 async def _request(
-    method: str, url: str, *, max_bytes: int = MAX_BODY_BYTES, **kw: Any
+    method: str,
+    url: str,
+    *,
+    max_bytes: int = MAX_BODY_BYTES,
+    provider: str | None = None,
+    **kw: Any,
 ) -> httpx.Response:
+    """`provider` escolhe o teto de tempo e se tempo esgotado merece retry.
+
+    Fonte lenta e de cota curta (Comtrade: ~18 s por pedido) ganha teto maior
+    e nenhuma repetição em tempo esgotado: repetir só gastaria mais cota e
+    seguraria a vaga do semáforo por minutos (T43b, config `DSH_HTTP_*`).
+    """
+    if provider is not None and "timeout" not in kw:
+        kw["timeout"] = settings.http_timeout_for(provider)
+    retry_on_timeout = provider is None or settings.retries_on_timeout_for(provider)
     client = await get_client()
     total = _total_timeout(kw)
     last: Exception | None = None
@@ -358,6 +381,15 @@ async def _request(
             raise
         except TimeoutError:
             last = TimeoutError(f"tempo total de {total:.0f}s esgotado")
+            if not retry_on_timeout:
+                break
+            if attempt < settings.http_retries:
+                await asyncio.sleep(0.6 * (2**attempt))
+        except httpx.TimeoutException as exc:
+            # Tempo esgotado numa fase (conexão, leitura): mesma regra acima.
+            last = exc
+            if not retry_on_timeout:
+                break
             if attempt < settings.http_retries:
                 await asyncio.sleep(0.6 * (2**attempt))
         except httpx.HTTPStatusError as exc:

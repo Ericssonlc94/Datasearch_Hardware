@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 import importlib
 import logging
+import math
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 from ..cache import Fetched, cache
@@ -477,4 +479,91 @@ async def collect_and_build(
 
 async def get_snapshot(force: bool = False) -> Snapshot:
     snap, _ = await collect_and_build(force=force)
+    return snap
+
+
+# T43 — snapshot de partida sem rede.
+#
+# O cache em disco guarda o último valor bom de cada fonte mesmo vencido. Montar
+# o snapshot a partir dele no start evita a página presa na tela de carregamento
+# pelo tempo da coleta inteira (9 min observados com o cache de 4 dias). O
+# payload sai marcado como `stale`; a coleta em background substitui.
+#
+# Abaixo desta fração de fontes o índice sairia de quase nada: aí vale mais
+# esperar a coleta do que mostrar um número enganoso.
+CACHE_SNAPSHOT_MIN_SHARE = 0.5
+
+CACHE_SNAPSHOT_REASON = (
+    "Snapshot montado do cache em disco; os números são da última coleta "
+    "gravada e a coleta nova ainda não terminou."
+)
+
+
+def cached_collected(
+    jobs: list[tuple[str, int, callable]] | None = None,
+) -> dict[str, Fetched]:
+    """O que o cache já tem, sem rede. Entrada sem payload fica de fora.
+
+    Valor fora do prazo da fonte entra como `stale`: o número é o último bom,
+    mas não é deste ciclo — e o painel precisa dizer isso na lista `degraded`.
+    """
+    collected: dict[str, Fetched] = {}
+    now = datetime.now(timezone.utc)
+    for key, ttl, _fetcher in (jobs if jobs is not None else _tasks()):
+        got = cache.peek(key)
+        if got is None or got.payload is None:
+            continue
+        if got.status == "ok" and _out_of_date(got.fetched_at, ttl, now):
+            got = replace(
+                got, status="stale", note="valor do cache em disco; fora do prazo"
+            )
+        collected[key] = got
+    return collected
+
+
+def _out_of_date(fetched_at: datetime | None, ttl: int, now: datetime) -> bool:
+    """Idade desconhecida conta como vencida: não dá para afirmar que está no prazo."""
+    if fetched_at is None:
+        return True
+    return (now - fetched_at).total_seconds() > ttl
+
+
+async def build_cached_snapshot() -> Snapshot | None:
+    """Snapshot do cache em disco, marcado como desatualizado, ou `None`.
+
+    Só leitura: não grava histórico, não grava preço de loja e não persiste o
+    cache. Erro aqui nunca impede o start — quem chama cai na coleta normal.
+    """
+    jobs = _tasks()
+    collected = cached_collected(jobs)
+    minimum = max(1, math.ceil(len(jobs) * CACHE_SNAPSHOT_MIN_SHARE))
+    if len(collected) < minimum:
+        log.info(
+            "cache: %d de %d fonte(s) com valor; sem snapshot de partida",
+            len(collected),
+            len(jobs),
+        )
+        return None
+
+    if settings.enable_comtrade_monthly:
+        _share_by_sh6(collected, "comtrade_monthly")
+    if settings.enable_comexstat:
+        _share_by_sh6(collected, "comexstat")
+
+    try:
+        model_history = await asyncio.to_thread(_model_history)
+        snap = build_snapshot(collected, model_history)
+    except Exception:  # noqa: BLE001 — o start não pode morrer por causa do cache
+        log.exception("falha ao montar o snapshot do cache; seguindo para a coleta")
+        return None
+
+    # `generated_at` conta a idade do dado, não a hora em que ele foi lido.
+    newest = max(
+        (f.fetched_at for f in collected.values() if f.fetched_at is not None),
+        default=None,
+    )
+    if newest is not None:
+        snap.generated_at = newest
+    snap.stale = True
+    snap.stale_reason = CACHE_SNAPSHOT_REASON
     return snap
