@@ -13,8 +13,8 @@ data/
 
 # Configurações locais
 opencode.json
-tests/
-docs/agentes/
+/tests/
+/docs/agentes/
 
 # Distribution / packaging
 .Python
