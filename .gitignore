@@ -34,6 +34,9 @@ MANIFEST
 .opencode/
 opencode.json
 scripts/agentes/
+docs/agentes/
+tests/
+.env.example
 
 # PyInstaller
 #   Usually these files are written by a python script from a template
