@@ -15,6 +15,7 @@ data/
 opencode.json
 tests/
 docs/agentes/
+requirements-dev.txt
 
 # Distribution / packaging
 .Python
@@ -40,6 +41,7 @@ MANIFEST
 scripts/agentes/
 .env.example
 CLAUDE.md
+
 
 # PyInstaller
 #   Usually these files are written by a python script from a template
