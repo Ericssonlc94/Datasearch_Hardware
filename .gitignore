@@ -32,10 +32,10 @@ share/python-wheels/
 MANIFEST
 .claude/
 .opencode/
-opencode.json
+./opencode.json
 scripts/agentes/
 docs/agentes/
-tests/
+/tests/
 .env.example
 
 # PyInstaller
