@@ -227,11 +227,9 @@ app = FastAPI(
 # O snapshot e o histórico são JSON grande e repetitivo; gzip corta ~80%.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
-# O painel só carrega arquivos locais (Plotly vendorizado em static/vendor/).
-# `style-src 'unsafe-inline'` cobre os `style=` gerados e o estilo que o Plotly
-# injeta; `img-src data:` cobre o favicon SVG e `blob:` o download em PNG pelo
-# menu do Plotly. Sem 'unsafe-eval': a QA confirmou que o Plotly 2.35.2 roda
-# sem ele (os `new Function` são fallbacks dentro de try/catch).
+# O painel só carrega arquivos locais (sem bibliotecas de terceiros).
+# `style-src 'unsafe-inline'` cobre os `style=` gerados; `img-src data:` cobre
+# o favicon SVG e `blob:` os downloads gerados no navegador. Sem 'unsafe-eval'.
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; "
@@ -454,6 +452,8 @@ async def api_history(
         bucket_seconds=bucket_seconds,
     )
     rebuilt = await asyncio.to_thread(history.reconstructed_until, keys)
+    # Dias (YYYY-MM-DD) com ponto reconstruído por chave; vem de history.py.
+    rebuilt_days = await asyncio.to_thread(history.reconstructed_days, keys)
     breaks = await asyncio.to_thread(history.model_breaks)
 
     return {
@@ -476,6 +476,8 @@ async def api_history(
                 # Até este instante, a série é recálculo diário com as séries
                 # coletadas, não medição ao vivo. `None` = só medição ao vivo.
                 "reconstructed_until": rebuilt.get(key),
+                # Lista dos dias reconstruídos (campo novo; o anterior segue).
+                "rebuilt_days": rebuilt_days.get(key, []),
                 # Pontos antes deste instante usam uma versão antiga da conta e
                 # não são comparáveis com os seguintes. `None` = sem marco.
                 "model_since": history.model_since_for(key, breaks),

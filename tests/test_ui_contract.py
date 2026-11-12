@@ -220,10 +220,9 @@ def test_loading_mostra_percentual_da_coleta():
     assert 'app.get("/api/progress"' in MAIN
 
 
-# ---------------- dashboard Plotly ----------------
+# ---------------- dashboard SVG ----------------
 
 DASH_JS = (STATIC / "dashboard.js").read_text(encoding="utf-8")
-VENDOR = STATIC / "vendor" / "plotly-2.35.2.min.js"
 
 
 def test_todo_id_usado_no_dashboard_existe_no_html():
@@ -259,28 +258,27 @@ def test_dashboard_js_carrega_antes_do_app_js():
     assert i_dash < i_app, "app.js chama window.Dash; dashboard.js precisa vir antes"
 
 
-def test_plotly_e_vendorizado_e_nao_vem_de_cdn():
-    assert VENDOR.exists(), "vendor/plotly-2.35.2.min.js ausente"
-    assert VENDOR.stat().st_size > 1_000_000
-    assert (VENDOR.parent / "plotly-2.35.2.LICENSE").exists()
-    assert (VENDOR.parent / "plotly-2.35.2.min.js.LICENSE.txt").exists()
-    assert "plotly-2.35.2.min.js" in DASH_JS
-    # O HTML não pode baixar Plotly no boot: o carregamento é sob demanda.
-    assert "/static/vendor/plotly" not in HTML
-    assert "cdn.plot.ly" not in HTML
-    assert "cdn.plot.ly" not in DASH_JS
-    assert "document.createElement('script')" in DASH_JS
-    assert "script.src = PLOTLY_URL" in DASH_JS
+def test_dashboard_e_svg_inline_sem_plotly_nem_cdn():
+    for texto in (DASH_JS, APP_JS, HTML):
+        assert "plotly" not in texto.lower()
+    assert "cdn." not in DASH_JS
+    assert "document.createElement('script')" not in DASH_JS
+    assert "/static/vendor" not in HTML
+    # cada gráfico é um <svg role=img> com aria-label
+    assert 'role="img"' in DASH_JS
+    assert "aria-label" in DASH_JS
+    assert "<title>" not in DASH_JS  # balão nativo duplicaria o tooltip
+    assert "ResizeObserver" in DASH_JS
 
 
 def test_dashboard_nao_interpola_lacuna_e_tem_drill_down():
-    assert "connectgaps: false" in DASH_JS
-    assert "plotly_click" in DASH_JS
+    # lacuna (null) quebra a linha em segmentos: nunca vira zero
+    assert "segmentsOf" in DASH_JS
     assert "selectCategory" in DASH_JS
-    assert "customdata" in DASH_JS
-    # o eixo duplo da fila: fila à esquerda, capex em US$ bi à direita
-    assert "yaxis2" in DASH_JS
-    assert "supply.capex_ttm" in DASH_JS
+    assert "dash:category" in DASH_JS
+    assert "dash-hit" in DASH_JS
+    # o eixo duplo da fila: fila à esquerda, inflação à direita
+    assert "y2" in DASH_JS
 
 
 def test_dashboard_usa_series_que_existem_no_catalogo():
@@ -307,6 +305,7 @@ def test_evolucao_abre_em_30_dias_e_marca_o_trecho_reconstruido():
     assert "rebuiltUntil: s.reconstructed_until" in APP_JS
     assert "Trecho tracejado" in APP_JS
     assert '"reconstructed_until": rebuilt.get(key)' in MAIN
+    assert '"rebuilt_days": rebuilt_days.get(key, [])' in MAIN
     assert "trend-rebuilt" in CHARTS_JS and "stroke-dasharray" in CHARTS_JS
     # 30 dias em bucket diário, alinhado com um ponto reconstruído por dia.
     assert '"30d": 86_400' in MAIN
@@ -376,3 +375,11 @@ def test_primeira_abertura_mostra_so_a_tela_de_busca():
     assert "document.body.classList.remove('booting');" in render
     assert 'id="retryBtn"' in HTML
     assert "$('retryBtn').addEventListener('click', () => load(true));" in APP_JS
+
+
+def test_ponto_reconstruido_antes_do_marco_do_modelo_entra_no_grafico():
+    # model_since descarta ponto ao vivo da conta antiga, mas não o dia
+    # reconstruído (já recalculado com a conta atual).
+    trecho = APP_JS[APP_JS.index("function currentPoints"):]
+    trecho = trecho[:trecho.index("\n}\n")]
+    assert "rebuilt_days" in trecho and ">= since" in trecho

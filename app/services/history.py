@@ -420,6 +420,15 @@ def model_since_for(key: str, breaks: dict[str, str]) -> str | None:
     return breaks[max(prefixes, key=len)] if prefixes else None
 
 
+# Sinais de mercado: se nenhum deles tem ponto novo num dia, não houve pregão.
+MARKET_SIGNALS = (
+    "brent", "copper", "nvda", "soxx", "micron", "remx",
+    "ptax", "usd_twd", "tsmc", "taiwan_relative",
+)
+# Dia com pregão só é reconstruído com cobertura (0–100) acima deste piso.
+RECONSTRUCT_MIN_COVERAGE_PCT = 60.0
+
+
 def record_reconstruction(
     days: dict,
     model_version: str,
@@ -428,11 +437,13 @@ def record_reconstruction(
 ) -> int:
     """Grava o IPH reconstruído por dia (fim do dia, UTC).
 
-    Regras: só dias **anteriores ao primeiro IPH medido ao vivo** — buraco
-    entre ciclos ao vivo (app desligado) continua lacuna, e o trecho
-    reconstruído fica sempre à esquerda da medição; ponto reconstruído já
-    gravado com a mesma versão do modelo não é refeito (a série fica estável
-    entre ciclos); versão nova do modelo apaga a reconstrução anterior.
+    Cobre todo dia **sem IPH medido ao vivo**, inclusive buraco entre ciclos
+    (app desligado). Dia com pregão (algum sinal de mercado com ponto novo
+    naquela data) é recalculado, desde que a cobertura passe do piso; dia sem
+    pregão repete o último valor gravado (série estagnada, sem recalcular).
+    Sem nenhum dado de mercado no histórico, todo dia conta como com pregão.
+    Nunca toca em ponto ao vivo; ponto reconstruído já gravado com a mesma
+    versão do modelo não é refeito; versão nova do modelo apaga a anterior.
     """
     with _db(path) as conn:
         row = conn.execute(
@@ -449,24 +460,70 @@ def record_reconstruction(
             if removed:
                 log.info("reconstrução: modelo mudou, %d ponto(s) refeito(s)", removed)
 
-        first_live = conn.execute(
-            "SELECT MIN(substr(ts, 1, 10)) FROM metric WHERE key = 'iph' AND kind != ?",
-            (RECONSTRUCTED,),
-        ).fetchone()[0]
-        rows = [
-            (f"{day.isoformat()}T23:59:59Z", key, float(value), RECONSTRUCTED)
-            for day, values in days.items()
-            if first_live is None or day.isoformat() < first_live
-            for key, value in values
-        ]
-        if not rows:
-            return 0
+        live = {
+            r[0] for r in conn.execute(
+                "SELECT DISTINCT substr(ts, 1, 10) FROM metric WHERE key = 'iph' AND kind != ?",
+                (RECONSTRUCTED,),
+            )
+        }
+        done = {
+            r[0] for r in conn.execute(
+                "SELECT DISTINCT substr(ts, 1, 10) FROM metric WHERE key = 'iph' AND kind = ?",
+                (RECONSTRUCTED,),
+            )
+        }
+        market_keys = [f"signal.{k}" for k in MARKET_SIGNALS]
+        marks = ",".join("?" for _ in market_keys)
+        market = {
+            r[0] for r in conn.execute(
+                f"SELECT DISTINCT substr(ts, 1, 10) FROM metric WHERE key IN ({marks})",
+                market_keys,
+            )
+        }
         before = conn.total_changes
-        conn.executemany(
-            "INSERT OR IGNORE INTO metric (ts, key, value, kind) VALUES (?, ?, ?, ?)",
-            rows,
-        )
+        for day in sorted(days):
+            iso = day.isoformat()
+            if iso in live or iso in done:
+                continue
+            ts = f"{iso}T23:59:59Z"
+            if market and iso not in market:
+                prev = conn.execute(
+                    "SELECT key, value FROM metric m WHERE ts = ("
+                    "SELECT MAX(ts) FROM metric WHERE key = m.key AND ts < ?) "
+                    "AND key IN (" + ",".join("?" for _ in days[day]) + ")",
+                    (f"{iso}T00:00:00Z", *[k for k, _ in days[day]]),
+                ).fetchall()
+                rows = [(ts, k, float(v), RECONSTRUCTED) for k, v in prev]
+            else:
+                values = dict(days[day])
+                cov = values.get("coverage")
+                if cov is not None and cov < RECONSTRUCT_MIN_COVERAGE_PCT:
+                    continue
+                rows = [(ts, k, float(v), RECONSTRUCTED) for k, v in days[day]]
+            conn.executemany(
+                "INSERT OR IGNORE INTO metric (ts, key, value, kind) VALUES (?, ?, ?, ?)",
+                rows,
+            )
         return conn.total_changes - before
+
+
+def reconstructed_days(
+    keys: Sequence[str], path: str | Path | None = None
+) -> dict[str, list[str]]:
+    """Dias (YYYY-MM-DD, UTC) com ponto reconstruído por chave, em ordem."""
+    if not keys:
+        return {}
+    placeholders = ",".join("?" for _ in keys)
+    with _db(path) as conn:
+        rows = conn.execute(
+            f"SELECT DISTINCT key, substr(ts, 1, 10) FROM metric WHERE kind = ? "
+            f"AND key IN ({placeholders}) ORDER BY key, 2",
+            (RECONSTRUCTED, *keys),
+        ).fetchall()
+    out: dict[str, list[str]] = {}
+    for key, day in rows:
+        out.setdefault(key, []).append(day)
+    return out
 
 
 def reconstructed_until(

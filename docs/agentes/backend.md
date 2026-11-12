@@ -623,3 +623,7 @@ servidor de teste.
 - Saiu `_listing_history` (payload["listings"] não existe mais). Entram `_model_history` (lê `kabum_model.*` dos últimos 60 dias → `model_history` do `build_prices_view`) e `_record_model_prices` (grava os `kabum_model.*` de `series_values` e tira `series_values` da resposta da API; `price.*` seguem pelo `record_snapshot`).
 - history: `record_model_prices(values, day)` e `model_price_history(keys, days)`. `record_listings`/`listing_history` ficam (testes pendentes usam).
 - pytest: 335 passed, 10 failed (as mesmas da T30); testes-pendentes: 86 passed.
+
+## T-Plotly (remoção)
+- Apagados `app/static/vendor/plotly-2.35.2*` (js + LICENSEs) e a pasta `vendor/`; comentário da CSP em `app/main.py` reescrito (diretivas intactas); títulos de seção em `styles.css`/`editorial.css` sem "Plotly". `index.html` e `tests/` já não citavam Plotly (`test_ui_contract` já cobre "sem plotly nem cdn").
+- pytest (KaBuM/TSMC off): 325 passed, 20 failed — em test_api_security(4), backfill(1), comtrade_monthly(1), queue_model(4), supply(1), ui_contract(9); nenhuma ligada ao Plotly.

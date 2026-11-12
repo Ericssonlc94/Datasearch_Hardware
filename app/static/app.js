@@ -1,7 +1,7 @@
 /* DataSearch Hardware — painel.
    Os gráficos pequenos usam SVG desenhado à mão, sem dependência externa.
-   A aba Gráficos (que inclui a evolução) usa Plotly local, carregado sob
-   demanda por dashboard.js; aqui ficam os dados, o estado e os textos. */
+   A aba Gráficos (que inclui a evolução) também é SVG inline, desenhado por
+   dashboard.js; aqui ficam os dados, o estado e os textos. */
 
 const REFRESH_MS = 15 * 60 * 1000;
 const RANGES = ['all', '24h', '7d', '30d', '90d', '1y'];
@@ -564,28 +564,32 @@ function renderTrendSummary(series, mainData) {
 }
 
 // Pontos antes de `model_since` usam a conta antiga da série e não entram
-// no gráfico: não são comparáveis com os seguintes.
+// no gráfico: não são comparáveis com os seguintes. Exceção: dias
+// reconstruídos (`rebuilt_days`) já foram recalculados com a conta atual.
 function currentPoints(s) {
   const since = Date.parse(s.model_since);
   const pts = s.points || [];
-  return Number.isFinite(since) ? pts.filter((p) => Date.parse(p.t) >= since) : pts;
+  if (!Number.isFinite(since)) return pts;
+  const rebuilt = new Set(Array.isArray(s.rebuilt_days) ? s.rebuilt_days : []);
+  return pts.filter((p) => Date.parse(p.t) >= since || rebuilt.has(String(p.t).slice(0, 10)));
 }
 
 function renderRebuiltNotice(series) {
   const notice = $('trendNotice');
   if (!notice) return;
+  const days = series.flatMap((s) => (
+    Array.isArray(s.rebuiltDays) ? s.rebuiltDays : []
+  )).sort();
   const until = series
     .map((s) => Date.parse(s.rebuiltUntil))
     .filter((ms) => Number.isFinite(ms));
   const parts = [];
-  if (until.length) {
-    const last = new Date(Math.max(...until)).toLocaleDateString('pt-BR', {
-      day: '2-digit', month: '2-digit', timeZone: 'UTC',
-    });
+  if (days.length || until.length) {
     parts.push(
-      `Trecho tracejado: até ${last}, o índice foi recalculado dia a dia com as ` +
-      'séries de mercado, câmbio e dados oficiais de cada data. Depois disso, a linha ' +
-      'cheia é a medição ao vivo, a cada 15 minutos.'
+      'Trecho tracejado: dias sem medição ao vivo (antes da primeira coleta ou com o ' +
+      'app desligado), recalculados com as séries de mercado, câmbio e dados oficiais ' +
+      'de cada data. Em dia sem pregão, repete o último valor. A linha cheia é a ' +
+      'medição ao vivo, a cada 15 minutos.'
     );
   }
   if (!parts.length) {
@@ -623,6 +627,7 @@ function renderTrend() {
       color: colorFor(s.key),
       points: currentPoints(s),
       rebuiltUntil: s.reconstructed_until,
+      rebuiltDays: s.rebuilt_days,
       decimals: s.unit === '%' ? 2 : 1,
     }));
     drawTrend('trendChart', {
@@ -668,6 +673,7 @@ function renderTrend() {
       color: colorFor(s.key),
       points: currentPoints(s),
       rebuiltUntil: s.reconstructed_until,
+      rebuiltDays: s.rebuilt_days,
       decimals: 2,
     }));
     // Só as duas estimativas no gráfico. O eixo acompanha o trecho com
@@ -1268,7 +1274,7 @@ function renderRanking(d) {
       const last = items[items.length - 1];
       const topDriver = (first.top_drivers || [])[0];
       const driverText = topDriver
-        ? ` O que mais pesa em ${esc(first.label)}: ` +
+        ? ` O que mais contribui em ${esc(first.label)}: ` +
           `<strong>${esc(plainDriverLabel(topDriver.driver_key, topDriver.driver_label))}</strong>.`
         : '';
       summary.innerHTML =
@@ -1296,7 +1302,7 @@ function renderRanking(d) {
     const pct = Number(it.projected_brazil_30d_pct) || 0;
     const width = Math.max(3, Math.min(100, (Math.abs(pct) / maxAbs) * 100));
     const why = top
-      ? `O que mais pesa: <strong>${esc(plainDriverLabel(top.driver_key, top.driver_label))}</strong>.`
+      ? `O que mais contribui: <strong>${esc(plainDriverLabel(top.driver_key, top.driver_label))}</strong>.`
       : '';
     const chips = drivers.slice(0, 4).map((c) =>
       `<span class="chip">${esc(c.driver_label)} <b>${fmtPct(c.contribution_pct, 1)}</b></span>`
@@ -1395,7 +1401,8 @@ function renderSimple(d) {
   );
   const top = rankedDrivers[0];
   const topText = top
-    ? ` O fator que mais pesa hoje é <strong>${esc(plainDriverLabel(top.key, top.label))}</strong> (${Number(top.score).toFixed(0)}/100).`
+    ? ` O fator que mais contribui para o índice hoje é <strong>${esc(plainDriverLabel(top.key, top.label))}</strong> ` +
+      `(${Number(top.score).toFixed(0)}/100 × peso ${(Number(top.weight) * 100).toFixed(0)}%).`
     : '';
   $('simpleLead').innerHTML =
     `O termômetro marca <strong>${score.toFixed(0)}/100</strong> — ` +
@@ -1427,7 +1434,7 @@ function renderSimple(d) {
     const tone = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
     const topDriver = (it.top_drivers || [])[0];
     const why = topDriver
-      ? `O que mais pesa: ${plainDriverLabel(topDriver.driver_key, topDriver.driver_label)}.`
+      ? `O que mais contribui: ${plainDriverLabel(topDriver.driver_key, topDriver.driver_label)}.`
       : firstSentence(it.narrative, 190);
     return `<div class="simple-cat">
       <div class="simple-cat-head">
@@ -1599,7 +1606,7 @@ function initTrendControls() {
 
   $('trendCategory').addEventListener('change', (ev) => selectTrendCategory(ev.target.value));
 
-  // Clique numa barra do ranking Plotly (dashboard.js).
+  // Clique numa barra do ranking (SVG em dashboard.js).
   window.addEventListener('dash:category', (ev) => {
     selectTrendCategory(ev.detail && ev.detail.key);
     const chart = $('trendCatChart');

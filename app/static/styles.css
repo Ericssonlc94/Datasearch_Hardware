@@ -363,7 +363,7 @@ td .u { font-family: var(--mono); font-size: 11px; color: var(--txt-3); display:
 .tip-row b { margin-left: auto; font-family: var(--mono); color: var(--txt); }
 .tip-unit { color: var(--txt-3); font-size: 10.5px; }
 
-/* ---------- Dashboard Plotly ---------- */
+/* ---------- Dashboard ---------- */
 .dash-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: 14px; flex-wrap: wrap; margin-bottom: 14px;

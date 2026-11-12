@@ -89,14 +89,53 @@ def _days(n: int) -> dict:
     }
 
 
-def test_grava_somente_antes_do_primeiro_ciclo_ao_vivo(db):
-    live_day = TODAY - timedelta(days=2)
-    history.record_points("iph", [(f"{live_day.isoformat()}T18:00:00Z", 55.0)],
-                          kind="modeled", path=db)
+def _market(db, *days):
+    """Marca dias com pregão: um ponto de sinal de mercado em cada data."""
+    history.record_points(
+        "signal.brent", [(f"{d.isoformat()}T12:00:00Z", 80.0) for d in days],
+        kind="observed", path=db,
+    )
+
+
+def test_reconstrucao_preenche_buraco_entre_ciclos_ao_vivo(db):
+    d = lambda n: TODAY - timedelta(days=n)  # noqa: E731
+    for n in (5, 1):  # IPH ao vivo nos dias -5 e -1; buraco em -4..-2
+        history.record_points("iph", [(f"{d(n).isoformat()}T18:00:00Z", 55.0)],
+                              kind="modeled", path=db)
+    _market(db, d(4), d(3), d(2))
     written = history.record_reconstruction(_days(5), "v1", path=db)
-    assert written == 3 * 2  # dias -5, -4, -3; duas chaves cada
-    until = history.reconstructed_until(["iph", "iph_br"], path=db)
-    assert until == {"iph": f"{(live_day - timedelta(days=1)).isoformat()}T23:59:59Z"}
+    assert written == 3 * 2  # dias -4, -3, -2; duas chaves cada
+    assert history.reconstructed_days(["iph"], path=db) == {
+        "iph": [d(4).isoformat(), d(3).isoformat(), d(2).isoformat()]
+    }
+    until = history.reconstructed_until(["iph"], path=db)
+    assert until == {"iph": f"{d(2).isoformat()}T23:59:59Z"}
+
+
+def test_dia_sem_pregao_repete_o_ultimo_iph_sem_recalcular(db):
+    d = lambda n: TODAY - timedelta(days=n)  # noqa: E731
+    history.record_points("iph", [(f"{d(4).isoformat()}T18:00:00Z", 55.0)],
+                          kind="modeled", path=db)
+    _market(db, d(4), d(1))  # -3 e -2 sem pregão; -1 com pregão
+    history.record_reconstruction(_days(3), "v1", path=db)
+    data = history.query(
+        ["iph"], datetime(2026, 10, 1, tzinfo=timezone.utc),
+        datetime(2026, 11, 5, tzinfo=timezone.utc), path=db,
+    )
+    # -3 e -2 repetem 55.0 (não o valor recalculado); -1 usa o recalculado.
+    assert [v for _, v in data["iph"]] == [55.0, 55.0, 55.0, 51.0]
+    assert history.reconstructed_days(["iph"], path=db)["iph"] == [
+        d(3).isoformat(), d(2).isoformat(), d(1).isoformat()
+    ]
+
+
+def test_dia_com_pregao_abaixo_do_piso_de_cobertura_fica_lacuna(db):
+    d = TODAY - timedelta(days=1)
+    _market(db, d)
+    rows = {d: [("iph", 50.0), ("coverage", 59.0)]}
+    assert history.record_reconstruction(rows, "v1", path=db) == 0
+    rows = {d: [("iph", 50.0), ("coverage", 60.0)]}
+    assert history.record_reconstruction(rows, "v1", path=db) == 2
 
 
 def test_mesma_versao_nao_refaz_e_versao_nova_substitui(db):

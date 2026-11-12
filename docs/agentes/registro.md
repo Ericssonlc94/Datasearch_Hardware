@@ -1,55 +1,33 @@
-# Registro de painéis
+# Registro de painéis — arquivo morto
 
-Cada painel grava aqui a própria linha ao assumir a função. O Coordenador lê
-este arquivo e `hc ls` antes de despachar. Cada painel só altera a própria
-linha; não mexa nas linhas das outras funções.
+Histórico do esquema antigo, em que cada painel era um terminal do herdr com
+sessão registrada à mão em `docs/agentes/registro.md`. Desde 11/11/2026 os
+painéis são sessões do Claude Code nomeadas `DSH / <Função>`, com o prompt de
+`.claude/agentes/<função>.md` e o mapa em `CLAUDE.md`. Não há mais terminal,
+`hc`, script de registro nem `SendMessage` por nome de sessão registrado: o
+Coordenador usa `ListAgents` para ver quem está vivo.
 
-Formato: `- <Função> = terminal <tN> · sessão <ses_id> (desde AAAA-MM-DD HH:MM)`
+O que existia e foi removido em 11/11/2026: `scripts/agentes/` (abrir,
+herdr_status, registrar, responder, retomar), `.opencode/agents/`,
+`.opencode/commands/painel/*`, `.opencode/commands/paineis/abrir.md`,
+`.opencode/skills/` e as skills `.claude/skills/assumir-funcao` e
+`.claude/skills/coordenar`. O histórico de trabalho de cada função continua nos
+relatórios `docs/agentes/<função>.md` e no `docs/agentes/quadro.md`.
 
-## Painéis
-- Coordenador (+Documentação) = terminal t10 · sessão bfeda321-49ff-4f18-a714-277467b17cc2 (desde 2026-11-10 11:40)
-- Dados = terminal t1 · sessão 45a82ff0-c3d9-41d2-a92c-a9afb6d4ee0d (desde 2026-11-10 11:40)
-- Modelo = terminal t3 · sessão 597ba87c-2d5c-44c9-99aa-ef4538c64fa6 (desde 2026-11-10 11:40)
-- Backend = terminal t2 · sessão 96cff875-4a3e-46b1-8f61-9d9f1b228314 (desde 2026-11-10 11:40)
-- Frontend = terminal t6 · sessão 0c377e37-0701-410d-970b-31505f2d0d1f (desde 2026-11-10 11:40)
-- QA = terminal t7 · sessão 18ac3ba8-6b7a-48df-8187-03e588aaaa78 (desde 2026-11-10 11:40)
-- Segurança = terminal t12 · sessão 326ca5a8-1d4b-4d8f-af09-d75c92694979 (desde 2026-11-10 11:40)
+## Último estado do esquema herdr (10/11/2026 11:40)
 
-Todos em Claude Code desde 10/11 11:40. Retomar num terminal fish com `hc keys`
-tecla a tecla: `claude --resume <sessão>`, depois `/assumir-funcao <função>`.
-As sessões OpenCode (ses_…) de 10/11 10:20 ficam só como histórico;
-`scripts/agentes/retomar.py` reabre essas.
+- Coordenador (+Documentação) = terminal t10 · sessão bfeda321-49ff-4f18-a714-277467b17cc2
+- Dados = terminal t1 · sessão 45a82ff0-c3d9-41d2-a92c-a9afb6d4ee0d
+- Modelo = terminal t3 · sessão 597ba87c-2d5c-44c9-99aa-ef4538c64fa6
+- Backend = terminal t2 · sessão 96cff875-4a3e-46b1-8f61-9d9f1b228314
+- Frontend = terminal t6 · sessão 0c377e37-0701-410d-970b-31505f2d0d1f
+- QA = terminal t7 · sessão 18ac3ba8-6b7a-48df-8187-03e588aaaa78
+- Segurança = terminal t12 · sessão 326ca5a8-1d4b-4d8f-af09-d75c92694979
 
-## Como retomar (herdr + OpenCode)
+Todos em Claude Code. As sessões OpenCode (`ses_…`) de 10/11 10:20 e o script
+`scripts/agentes/retomar.py` ficaram só como histórico; o script foi removido.
 
-1. Em cada aba do herdr, abra o OpenCode:
-
-   ```sh
-   opencode
-   ```
-
-2. Na TUI, assuma a função (o terminal vai como argumento):
-
-   ```
-   /painel/<função> <tN>
-   ```
-
-   Exemplos: `/painel/coordenador t10`, `/painel/dados t1`,
-   `/painel/modelo t3`, `/painel/backend t2`, `/painel/frontend t6`,
-   `/painel/qa t7`, `/painel/seguranca <tN>`.
-
-3. Para abrir todos de uma vez, com autorização do usuário, no Coordenador:
-
-   ```
-   /paineis/abrir
-   ```
-
-4. `hc ls` mostra os terminais vivos; `hc get <tN>` mostra o estado de um.
-
-O registro é por terminal, não por sessão: se o core do herdr reiniciar e os
-IDs mudarem, rode `/painel/<função>` de novo em cada aba.
-
-## Histórico (Claude Code, até 05/11/2026)
+## Sessões Claude Code anteriores (até 05/11/2026)
 
 | Função | Painel herdr | Terminal | Sessão (id) |
 | --- | --- | --- | --- |

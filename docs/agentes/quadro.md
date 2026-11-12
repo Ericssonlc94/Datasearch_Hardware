@@ -3,6 +3,19 @@
 Mantido pelo Coordenador. Status: a fazer · fazendo · pausado · feito · bloqueado · desfeita.
 Atualizado em 2026-11-10 15:00. Suíte: 325 passed / 20 failed (10/11, com DSH_ENABLE_KABUM=false DSH_ENABLE_TSMC=false).
 
+## Para retomar (11/11/2026)
+
+- Esquema novo de painéis: uma sessão Claude Code por função (`DSH / 1`,
+  `DSH / Dados`, `DSH / Modelo`, `DSH / Backend`, `DSH / Frontend`, `DSH / QA`,
+  `DSH / Segurança`), com o prompt de `.claude/agentes/<função>.md` e o mapa em
+  `CLAUDE.md`. Sem herdr, sem `hc`, sem scripts de registro: o Coordenador vê
+  quem está vivo com `ListAgents`.
+- Histórico do esquema antigo (terminais t1–t12) em `registro.md`, agora arquivo
+  morto. Os relatórios de cada função continuam a fonte do histórico.
+- O quadro abaixo é o de 10/11 15:00 e segue valendo. Continuam abertos: T45
+  (KaBuM), T46 (QA), T43c (Frontend), T32/T33/T34, T35b–T35e e a decisão de
+  reiniciar o servidor principal com o código novo.
+
 ## Em aberto
 
 | ID | Tarefa | Função | Status | Observação |

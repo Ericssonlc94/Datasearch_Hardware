@@ -61,20 +61,20 @@ são agrupadas.
 
 ## As oito funções
 
-Cada função é um agente (um painel no herdr). A função **é dona** de algumas
+Cada função é um agente (uma sessão Claude Code). A função **é dona** de algumas
 pastas: só ela edita esses arquivos. Precisa de mudança fora da sua área? Faz
 um pedido ao dono (veja "Como os agentes conversam").
 
 | Função | É dona de | Parte do projeto | Edita código? |
 | --- | --- | --- | --- |
-| **Coordenador** | `docs/agentes/quadro.md` | — | não; despacha pelo `/coordenar` e só faz commit com sua aprovação |
+| **Coordenador** | `docs/agentes/quadro.md`, `README.md`, `docs/fontes.md` | — | não edita o app; despacha com `SendMessage` e só faz commit com sua aprovação |
 | **Dados** | `app/providers/`, `app/http.py`, `app/cache.py` | 1 Buscadores | sim |
 | **Modelo** | `app/domain/`, `app/series_utils.py` | 3 Cálculos | sim |
 | **Backend** | `app/main.py`, `app/config.py`, `app/schemas.py`, `app/services/`, `run.py`, `.env.example`, `requirements.txt`, `requirements-dev.txt` | 2 Coordenação, 4 Servidor | sim |
 | **Frontend** | `app/static/` | 5 Painel | sim |
 | **QA** | `tests/` | 6 Testes | só testes |
 | **Segurança** | nenhum arquivo de código | revisa 1, 4 e 5 | não; só relata |
-| **Documentação** | `README.md`, `docs/fontes.md` | 7 Documentação | só docs |
+| **Documentação** | `README.md`, `docs/fontes.md` | 7 Documentação | só docs; desde 10/11/2026 fica com o Coordenador, salvo se você abrir a sessão só para ela |
 
 Se você tiver menos agentes, junte funções vizinhas: **Dados + Backend**,
 **Frontend + QA visual**, **Segurança + Documentação**. O Coordenador pode ser
@@ -82,35 +82,33 @@ você.
 
 ### Como montar os painéis
 
-Cada função é um painel fixo no herdr, com o Claude Code aberto na pasta do
-projeto. **Todos os painéis precisam do mesmo modo de permissão**; senão as
-mensagens entre eles ficam retidas esperando aprovação.
+Cada função é uma sessão do Claude Code nomeada `DSH / <Função>` na pasta do
+projeto. Não há herdr, terminal fixo, script de registro nem comando de
+assunção.
 
-1. Abra um painel por função e rode nele `/assumir-funcao <função>`
-   (`dados`, `modelo`, `backend`, `frontend`, `qa`, `seguranca` ou
-   `documentacao`). O painel lê o seu papel em `docs/agentes/papeis/` e grava o
-   nome da sessão em `docs/agentes/registro.md`.
-2. Abra mais um painel para o Coordenador. Não precisa de comando ao abrir.
-3. Para qualquer pedido, fale só com o Coordenador:
-   `/coordenar <o que você quer>`.
+1. Abra uma sessão por função e cole como primeira mensagem o conteúdo de
+   `.claude/agentes/<função>.md`. O painel fica parado até receber tarefa.
+2. Abra a sessão do Coordenador (`DSH / 1`). Ele lê `CLAUDE.md` e não precisa
+   de comando ao abrir.
+3. Para qualquer pedido, fale só com o Coordenador. Ele descobre quem está vivo
+   com `ListAgents`, divide o pedido por função, mostra o plano e manda cada
+   parte ao painel dono com `SendMessage`. Quando uma parte depende de outra,
+   ele espera a primeira terminar. No fim, pede os testes à QA e devolve um
+   resumo único. Se faltar o painel de alguma função, ele avisa qual abrir e
+   espera; não cria agentes temporários.
 
-O Coordenador lê o registro, confere quais painéis estão vivos, divide o
-pedido por função, mostra o plano e manda cada parte ao painel dono. Quando
-uma parte depende de outra, ele espera a primeira terminar. No fim, pede os
-testes à QA e devolve um resumo único. Se faltar o painel de alguma função,
-ele avisa qual abrir e espera; não cria agentes temporários.
-
-Ao abrir sessões novas, rode `/assumir-funcao` de novo: o nome da sessão muda
-e o registro é atualizado.
+Ao abrir sessões novas, basta colar de novo o prompt da função: quem existe é
+quem aparece no `ListAgents`, sem registro a atualizar.
 
 ### Arquivos de apoio em `docs/agentes/`
 
 | Arquivo | Quem escreve | Para quê |
 | --- | --- | --- |
-| `papeis/<funcao>.md` | humano | O papel de cada função: missão, pastas, regras |
-| `registro.md` | cada painel, ao assumir a função | Função → nome da sessão |
+| `../../CLAUDE.md` | humano | Mapa do projeto, fatias, regras gerais e protocolo do Coordenador |
+| `../../.claude/agentes/<funcao>.md` | humano | Prompt curto que transforma a sessão em painel daquela função |
 | `quadro.md` | Coordenador | Status de cada tarefa (a fazer, fazendo, feito, bloqueado) |
 | `<funcao>.md` (ex.: `dados.md`) | a própria função | Relatório: o que fez, o que descobriu, o que ficou pendente |
+| `registro.md` | — | Arquivo morto: histórico do esquema antigo de terminais |
 
 Regras de convivência:
 
@@ -164,8 +162,8 @@ o código da sua área, ou deixe para abrir esses dois painéis só na Onda 2.
 
 ## Fichas das funções
 
-Resumo de cada papel. O texto completo, usado pelo `/assumir-funcao`, está em
-`docs/agentes/papeis/<funcao>.md`.
+Resumo de cada papel. O prompt que abre cada painel está em
+`.claude/agentes/<funcao>.md`; o mapa e as regras gerais, em `CLAUDE.md`.
 
 ### Coordenador
 

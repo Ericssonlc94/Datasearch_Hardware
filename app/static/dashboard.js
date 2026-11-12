@@ -1,14 +1,12 @@
-/* DataSearch Hardware — gráficos Plotly, carregados sob demanda.
-   Nenhuma dependência de CDN: Plotly vem de /static/vendor. O arquivo só é
-   injetado quando a aba Gráficos é aberta pela primeira vez. O resumo
-   (KPIs, radar e ranking) vem só do snapshot e não depende do período. A
-   evolução (séries escolhidas e produto) é desenhada aqui com dados e
-   estado do app.js. */
+/* DataSearch Hardware — gráficos da aba Gráficos em SVG inline, sem
+   biblioteca. O resumo (KPIs, radar e ranking) vem só do snapshot e não
+   depende do período. A evolução (séries escolhidas e produto) é desenhada
+   aqui com dados e estado do app.js. Cada gráfico é refeito quando o
+   contêiner muda de tamanho (ResizeObserver), para o texto não escalar. */
 
 (function () {
   'use strict';
 
-  const PLOTLY_URL = '/static/vendor/plotly-2.35.2.min.js';
   const COLOR = {
     blue: '#4f8cff',
     orange: '#ff9f43',
@@ -18,12 +16,12 @@
     grid: '#263149',
     zero: '#475569',
     txt: '#94a3bd',
+    dim: '#64748b',
   };
 
   const DASH = {
     active: false,
     snapshot: null,
-    loading: null,
   };
 
   const d$ = (id) => document.getElementById(id);
@@ -55,86 +53,152 @@
     return t.length > n ? `${t.slice(0, n - 1)}…` : t;
   };
 
-  function xTickFormat(range) {
-    if (range === '24h') return '%H:%M';
-    return range === '1y' ? '%m/%y' : '%d/%m';
-  }
+  const f1 = (n) => Number(n).toFixed(1);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const isNum = (v) => v !== null && v !== undefined && Number.isFinite(Number(v));
 
+  /* ---------------- base SVG ---------------- */
 
-  function axis(extra = {}) {
-    return {
-      gridcolor: COLOR.grid,
-      zerolinecolor: COLOR.zero,
-      linecolor: COLOR.grid,
-      tickfont: { size: 10, color: '#64748b' },
-      ...extra,
-    };
-  }
+  // Cada gráfico registra uma função (el, largura, altura) que devolve o
+  // HTML; ela roda de novo a cada mudança de tamanho do contêiner.
+  const REG = new Map();
+  const pending = new Set();
+  let observer = null;
 
-  function layout(extra = {}) {
-    const base = {
-      paper_bgcolor: 'rgba(0,0,0,0)',
-      plot_bgcolor: 'rgba(0,0,0,0)',
-      font: { family: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', color: COLOR.txt, size: 11 },
-      margin: { l: 54, r: 18, t: 34, b: 38 },
-      hovermode: 'x unified',
-      hoverlabel: { bgcolor: '#161d2e', bordercolor: '#3b4a68', font: { color: '#e8edf7', size: 12 } },
-      legend: { orientation: 'h', x: 0, y: 1.12, font: { size: 10.5 } },
-      colorway: [COLOR.blue, COLOR.orange, COLOR.green, COLOR.red, '#c084fc', '#facc15', '#38bdf8', '#fb7185'],
-      xaxis: axis(),
-      yaxis: axis(),
-    };
-    return {
-      ...base,
-      ...extra,
-      xaxis: { ...base.xaxis, ...(extra.xaxis || {}) },
-      yaxis: { ...base.yaxis, ...(extra.yaxis || {}) },
-    };
-  }
-
-  const CONFIG = {
-    responsive: true,
-    displaylogo: false,
-    modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'],
-    toImageButtonOptions: {
-      format: 'png',
-      filename: 'datasearch-hardware',
-      scale: 2,
-    },
-  };
-
-  function draw(id, traces, extraLayout) {
+  function renderOne(id) {
     const el = d$(id);
-    if (!el || !window.Plotly) return;
-    window.Plotly.react(el, traces, layout(extraLayout), CONFIG).catch((err) => {
-      console.error('plotly', id, err);
-      el.innerHTML = `<p class="dash-error">Falha ao desenhar o gráfico: ${dEsc(err.message)}</p>`;
+    const fn = REG.get(id);
+    if (!el || !fn) return;
+    const w = Math.floor(el.clientWidth);
+    const h = Math.floor(el.clientHeight);
+    if (w < 40 || h < 40) return; // aba oculta: refaz quando aparecer
+    el.style.position = 'relative';
+    // O papel e o rótulo passam para o <svg>; no contêiner, role=img
+    // esconderia o conteúdo para leitores de tela.
+    el.removeAttribute('role');
+    el.removeAttribute('aria-label');
+    try {
+      fn(el, w, h);
+    } catch (err) {
+      console.error('dashboard', id, err);
+      el.innerHTML = '<p class="dash-error">Falha ao desenhar o gráfico.</p>';
+    }
+  }
+
+  function scheduleRender(id) {
+    if (pending.has(id)) return;
+    pending.add(id);
+    requestAnimationFrame(() => {
+      pending.delete(id);
+      renderOne(id);
     });
   }
 
-  function drawEmpty(id, message) {
-    draw(
-      id,
-      [],
-      {
-        xaxis: { visible: false },
-        yaxis: { visible: false },
-        margin: { l: 10, r: 10, t: 10, b: 10 },
-        annotations: [{
-          text: message,
-          showarrow: false,
-          xref: 'paper',
-          yref: 'paper',
-          x: 0.5,
-          y: 0.5,
-          font: { size: 12.5, color: '#64748b' },
-        }],
-      },
-    );
+  function paint(id, fn) {
+    const el = d$(id);
+    if (!el) return;
+    REG.set(id, fn);
+    if (!observer && window.ResizeObserver) {
+      observer = new ResizeObserver((entries) => {
+        entries.forEach((e) => { if (e.target.id) scheduleRender(e.target.id); });
+      });
+    }
+    if (observer && el.dataset.ro !== '1') {
+      el.dataset.ro = '1';
+      observer.observe(el);
+    }
+    renderOne(id);
   }
 
-  function modeFor(points) {
-    return points && points.length < 3 ? 'lines+markers' : 'lines';
+  function resizeVisible() {
+    if (!DASH.active) return;
+    requestAnimationFrame(() => REG.forEach((_, id) => renderOne(id)));
+  }
+  window.addEventListener('resize', resizeVisible);
+
+  // Sem elemento title: o navegador o mostraria como balão nativo sobre o gráfico.
+  // O nome acessível fica no aria-label do role=img.
+  function svgDoc(w, h, label, inner) {
+    const t = dEsc(label);
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${t}" ` +
+      'style="display:block;font-family:system-ui,-apple-system,\'Segoe UI\',Roboto,sans-serif">' +
+      `${inner}</svg><div class="trend-tip hidden"></div>`;
+  }
+
+  const txt = (x, y, s, o = {}) => (
+    `<text x="${f1(x)}" y="${f1(y)}" fill="${o.fill || COLOR.dim}" font-size="${o.size || 10}"` +
+    `${o.anchor ? ` text-anchor="${o.anchor}"` : ''}${o.mono ? ' font-family="monospace"' : ''}` +
+    `${o.rotate ? ` transform="rotate(${o.rotate} ${f1(x)} ${f1(y)})"` : ''}>${dEsc(s)}</text>`
+  );
+
+  function drawEmpty(id, message) {
+    paint(id, (el, w, h) => {
+      el.innerHTML = svgDoc(w, h, message, txt(w / 2, h / 2, message, { anchor: 'middle', size: 12.5 }));
+    });
+  }
+
+  function niceScale(lo, hi, count = 5) {
+    let a = lo;
+    let b = hi;
+    if (!(b > a)) { const c = a || 0; a = c - 1; b = c + 1; }
+    const raw = (b - a) / count;
+    const mag = 10 ** Math.floor(Math.log10(raw));
+    const n = raw / mag;
+    const step = (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * mag;
+    const nlo = Math.floor(a / step + 1e-9) * step;
+    const nhi = Math.ceil(b / step - 1e-9) * step;
+    const ticks = [];
+    const steps = Math.round((nhi - nlo) / step);
+    for (let i = 0; i <= steps; i += 1) {
+      const v = nlo + i * step;
+      ticks.push(Math.abs(v) < step * 1e-9 ? 0 : v);
+    }
+    return { lo: nlo, hi: nhi, ticks, dec: Math.min(3, Math.max(0, -Math.floor(Math.log10(step) + 1e-9))) };
+  }
+
+  function placeTip(el, tip, cx, cy) {
+    const tw = tip.offsetWidth;
+    const th = tip.offsetHeight;
+    let left = cx + 14;
+    if (left + tw > el.clientWidth - 6) left = Math.max(6, cx - tw - 14);
+    let top = cy - th - 10;
+    if (top < 6) top = cy + 16;
+    if (top + th > el.clientHeight - 6) top = Math.max(6, el.clientHeight - th - 6);
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+  }
+
+  function showTip(el, html, ev) {
+    const tip = el.querySelector('.trend-tip');
+    if (!tip) return;
+    tip.innerHTML = html;
+    tip.classList.remove('hidden');
+    const r = el.getBoundingClientRect();
+    placeTip(el, tip, ev.clientX - r.left, ev.clientY - r.top);
+  }
+
+  function hideTip(el) {
+    const tip = el.querySelector('.trend-tip');
+    if (tip) tip.classList.add('hidden');
+  }
+
+  const tipRow = (color, label, value, unit = '') => (
+    `<div class="tip-row"><span class="tip-dot" style="background:${dEsc(color)}"></span>` +
+    `<span class="tip-label">${dEsc(label)}</span><b>${dEsc(value)}</b>` +
+    `${unit ? `<span class="tip-unit">${dEsc(unit)}</span>` : ''}</div>`
+  );
+
+  const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+
+  // Verde → cinza → vermelho conforme a pressão (0–100).
+  function scoreFill(score) {
+    const t = clamp((Number(score) || 0) / 100, 0, 1);
+    const stops = [COLOR.green, COLOR.muted, COLOR.red].map(hexRgb);
+    const k = t * 2;
+    const i = Math.min(1, Math.floor(k));
+    const u = k - i;
+    const c = stops[i].map((v, j) => Math.round(v + (stops[i + 1][j] - v) * u));
+    return `rgb(${c.join(',')})`;
   }
 
   function setStatus(text, cls = '') {
@@ -142,22 +206,6 @@
     if (!el) return;
     el.textContent = text;
     el.className = `dash-status${cls ? ` ${cls}` : ''}`;
-  }
-
-  /* ---------------- Plotly sob demanda ---------------- */
-
-  function loadPlotly() {
-    if (window.Plotly) return Promise.resolve(window.Plotly);
-    if (DASH.loading) return DASH.loading;
-    DASH.loading = new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = PLOTLY_URL;
-      script.async = true;
-      script.onload = () => resolve(window.Plotly);
-      script.onerror = () => reject(new Error('não foi possível carregar o Plotly local'));
-      document.head.appendChild(script);
-    });
-    return DASH.loading;
   }
 
   /* ---------------- render: KPIs ---------------- */
@@ -236,44 +284,75 @@
       return;
     }
     const items = [...snap.ranking].sort(
-      (a, b) => a.projected_brazil_30d_pct - b.projected_brazil_30d_pct,
+      (a, b) => (Number(b.projected_brazil_30d_pct) || 0) - (Number(a.projected_brazil_30d_pct) || 0),
     );
-    const y = items.map((i) => short(i.label, 24));
-    const custom = items.map((i) => i.key);
-    const colors = items.map((i) => i.pressure_score);
-    draw('dashRanking', [
-      {
-        x: items.map((i) => i.projected_global_30d_pct),
-        y,
-        type: 'bar',
-        orientation: 'h',
-        name: 'Global (US$)',
-        marker: { color: 'rgba(124,138,165,.55)' },
-        customdata: custom,
-        hovertemplate: '%{y}<br>global %{x:+.1f}%<extra></extra>',
-      },
-      {
-        x: items.map((i) => i.projected_brazil_30d_pct),
-        y,
-        type: 'bar',
-        orientation: 'h',
-        name: 'Brasil (câmbio + carga)',
-        marker: {
-          color: colors,
-          colorscale: [[0, COLOR.green], [0.5, COLOR.muted], [1, COLOR.red]],
-          cmin: 0,
-          cmax: 100,
-        },
-        customdata: custom,
-        hovertemplate: '%{y}<br>Brasil %{x:+.1f}%<extra></extra>',
-      },
-    ], {
-      barmode: 'group',
-      margin: { l: 150, r: 20, t: 24, b: 38 },
-      xaxis: { zeroline: true, zerolinecolor: COLOR.zero, title: { text: 'variação projetada 30d (%)', font: { size: 10 } } },
-      yaxis: { automargin: true, tickfont: { size: 10.5, color: COLOR.txt } },
+    const label = 'Barras horizontais da estimativa de 30 dias por produto, global e Brasil: ' +
+      items.map((i) => `${i.label} ${dPct(i.projected_brazil_30d_pct)} no Brasil`).join('; ');
+    paint('dashRanking', (el, w, h) => {
+      const P = { l: Math.min(150, Math.round(w * 0.36)), r: 22, t: 30, b: 42 };
+      const iw = w - P.l - P.r;
+      const ih = h - P.t - P.b;
+      const vals = items.flatMap((i) => [i.projected_global_30d_pct, i.projected_brazil_30d_pct])
+        .filter(isNum).map(Number);
+      const sc = niceScale(Math.min(0, ...vals), Math.max(0, ...vals), Math.max(2, Math.floor(iw / 80)));
+      const x = (v) => P.l + ((v - sc.lo) / (sc.hi - sc.lo)) * iw;
+      const rowH = ih / items.length;
+      const barH = Math.min(16, (rowH * 0.74) / 2);
+      let g = '';
+      sc.ticks.forEach((t) => {
+        const gx = x(t);
+        g += `<line x1="${f1(gx)}" y1="${P.t}" x2="${f1(gx)}" y2="${P.t + ih}" stroke="${t === 0 ? COLOR.zero : COLOR.grid}"/>`;
+        g += txt(gx, P.t + ih + 14, dNum(t, sc.dec), { anchor: 'middle', mono: true });
+      });
+      g += txt(P.l + iw / 2, h - 6, 'variação projetada 30d (%)', { anchor: 'middle' });
+      // legenda
+      g += `<rect x="${P.l}" y="6" width="10" height="10" rx="2" fill="${COLOR.muted}" fill-opacity=".55"/>`;
+      g += txt(P.l + 15, 15, 'Global (US$)');
+      g += `<rect x="${P.l + 100}" y="6" width="10" height="10" rx="2" fill="url(#dashRankGrad)"/>`;
+      g += txt(P.l + 115, 15, 'Brasil (câmbio + carga)');
+      const x0 = x(0);
+      const bar = (v, y, fill, op) => {
+        if (!isNum(v)) return '';
+        const bx = x(Number(v));
+        return `<rect x="${f1(Math.min(x0, bx))}" y="${f1(y)}" width="${f1(Math.max(1, Math.abs(bx - x0)))}" ` +
+          `height="${f1(barH)}" fill="${fill}"${op ? ` fill-opacity="${op}"` : ''}/>`;
+      };
+      items.forEach((it, i) => {
+        const top = P.t + i * rowH;
+        const mid = top + rowH / 2;
+        const y0 = mid - barH;
+        g += `<rect class="dash-hit" data-i="${i}" x="0" y="${f1(top)}" width="${w}" height="${f1(rowH)}" ` +
+          'fill="transparent" style="cursor:pointer"/>';
+        g += bar(it.projected_global_30d_pct, y0, COLOR.muted, 0.55);
+        g += bar(it.projected_brazil_30d_pct, y0 + barH, scoreFill(it.pressure_score));
+        g += txt(P.l - 8, mid + 3.5, short(it.label, Math.max(8, Math.floor((P.l - 12) / 6.2))), {
+          anchor: 'end', size: 10.5, fill: COLOR.txt,
+        });
+      });
+      const defs = '<defs><linearGradient id="dashRankGrad" x1="0" x2="1">' +
+        `<stop offset="0" stop-color="${COLOR.green}"/><stop offset=".5" stop-color="${COLOR.muted}"/>` +
+        `<stop offset="1" stop-color="${COLOR.red}"/></linearGradient></defs>`;
+      el.innerHTML = svgDoc(w, h, label, defs + g);
+      const svg = el.querySelector('svg');
+      const hits = svg.querySelectorAll('.dash-hit');
+      const clear = () => { hits.forEach((r) => r.setAttribute('fill', 'transparent')); hideTip(el); };
+      svg.addEventListener('pointermove', (ev) => {
+        const hit = ev.target.closest && ev.target.closest('.dash-hit');
+        if (!hit) { clear(); return; }
+        hits.forEach((r) => r.setAttribute('fill', r === hit ? 'rgba(255,255,255,.05)' : 'transparent'));
+        const it = items[Number(hit.dataset.i)];
+        showTip(el,
+          `<div class="tip-head">${dEsc(it.label)}</div>` +
+          tipRow(COLOR.muted, 'Global (US$)', dPct(it.projected_global_30d_pct)) +
+          tipRow(scoreFill(it.pressure_score), 'Brasil', dPct(it.projected_brazil_30d_pct)) +
+          '<div class="tip-unit">clique para ver a evolução</div>', ev);
+      });
+      svg.addEventListener('pointerleave', clear);
+      svg.addEventListener('click', (ev) => {
+        const hit = ev.target.closest && ev.target.closest('.dash-hit');
+        if (hit) selectCategory(items[Number(hit.dataset.i)].key);
+      });
     });
-    bindCategoryClick('dashRanking');
   }
 
   function renderRadar() {
@@ -282,46 +361,55 @@
       drawEmpty('dashRadar', 'Vetores indisponíveis.');
       return;
     }
-    const drivers = snap.drivers;
-    const labels = drivers.map((d) => short(d.label.split(':')[0].split('—')[0].trim(), 18));
-    const now = drivers.map((d) => d.score);
-    const traces = [{
-      type: 'scatterpolar',
-      r: now,
-      theta: labels,
-      fill: 'toself',
-      name: 'agora',
-      line: { color: COLOR.orange, width: 2 },
-      fillcolor: 'rgba(255,159,67,.12)',
-      hovertemplate: '%{theta}: %{r:.0f}<extra>agora</extra>',
-    }];
-    draw('dashRadar', traces, {
-      polar: {
-        bgcolor: 'rgba(0,0,0,0)',
-        radialaxis: {
-          range: [0, 100],
-          gridcolor: COLOR.grid,
-          linecolor: COLOR.grid,
-          tickfont: { size: 9, color: '#64748b' },
-        },
-        angularaxis: { gridcolor: COLOR.grid, linecolor: COLOR.grid, tickfont: { size: 9.5, color: COLOR.txt } },
-      },
-      showlegend: false,
-      margin: { l: 30, r: 30, t: 20, b: 20 },
+    const drivers = snap.drivers.map((d) => ({
+      full: String(d.label || ''),
+      name: short(String(d.label || '').split(':')[0].split('—')[0].trim(), 18),
+      score: clamp(Number(d.score) || 0, 0, 100),
+    }));
+    const label = 'Radar dos fatores de pressão (0 a 100): ' +
+      drivers.map((d) => `${d.name} ${dNum(d.score, 0)}`).join('; ');
+    paint('dashRadar', (el, w, h) => {
+      const n = drivers.length;
+      const cx = w / 2;
+      const cy = h / 2 + 4;
+      const R = Math.max(30, Math.min(w / 2 - 70, h / 2 - 28));
+      const ang = (i) => -Math.PI / 2 + (2 * Math.PI * i) / n;
+      const pt = (i, r) => [cx + Math.cos(ang(i)) * r, cy + Math.sin(ang(i)) * r];
+      let g = '';
+      [25, 50, 75, 100].forEach((v) => {
+        const ring = drivers.map((_, i) => pt(i, (R * v) / 100).map(f1).join(',')).join(' ');
+        g += `<polygon points="${ring}" fill="none" stroke="${COLOR.grid}"/>`;
+        g += txt(cx + 3, cy - (R * v) / 100 - 2, String(v), { size: 9 });
+      });
+      drivers.forEach((d, i) => {
+        const [ex, ey] = pt(i, R);
+        g += `<line x1="${f1(cx)}" y1="${f1(cy)}" x2="${f1(ex)}" y2="${f1(ey)}" stroke="${COLOR.grid}"/>`;
+        const [lx, ly] = pt(i, R + 12);
+        const c = Math.cos(ang(i));
+        g += txt(lx, ly + 3.5, d.name, {
+          anchor: Math.abs(c) < 0.2 ? 'middle' : (c > 0 ? 'start' : 'end'), size: 9.5, fill: COLOR.txt,
+        });
+      });
+      const poly = drivers.map((d, i) => pt(i, (R * d.score) / 100).map(f1).join(',')).join(' ');
+      g += `<polygon points="${poly}" fill="rgba(255,159,67,.12)" stroke="${COLOR.orange}" stroke-width="2" stroke-linejoin="round"/>`;
+      drivers.forEach((d, i) => {
+        const [px, py] = pt(i, (R * d.score) / 100);
+        g += `<circle cx="${f1(px)}" cy="${f1(py)}" r="3" fill="${COLOR.orange}"/>`;
+        g += `<circle class="dash-hit" data-i="${i}" cx="${f1(px)}" cy="${f1(py)}" r="14" fill="transparent"/>`;
+      });
+      el.innerHTML = svgDoc(w, h, label, g);
+      const svg = el.querySelector('svg');
+      svg.addEventListener('pointermove', (ev) => {
+        const hit = ev.target.closest && ev.target.closest('.dash-hit');
+        if (!hit) { hideTip(el); return; }
+        const d = drivers[Number(hit.dataset.i)];
+        showTip(el, `<div class="tip-head">${dEsc(d.full)}</div>${tipRow(COLOR.orange, 'agora', dNum(d.score, 0))}`, ev);
+      });
+      svg.addEventListener('pointerleave', () => hideTip(el));
     });
   }
 
   /* ---------------- interação ---------------- */
-
-  function bindCategoryClick(id) {
-    const el = d$(id);
-    if (!el || el.dataset.bound === '1') return;
-    el.dataset.bound = '1';
-    el.on('plotly_click', (ev) => {
-      const key = ev && ev.points && ev.points[0] && ev.points[0].customdata;
-      if (key) selectCategory(key);
-    });
-  }
 
   // O produto da evolução é estado do app.js: o clique só avisa.
   function selectCategory(key) {
@@ -332,7 +420,7 @@
   /* ---------------- ciclo ---------------- */
 
   function refresh() {
-    if (!DASH.snapshot || !window.Plotly || !DASH.active) return;
+    if (!DASH.snapshot || !DASH.active) return;
     renderKpis();
     renderRadar();
     renderRanking();
@@ -348,33 +436,15 @@
     }
   }
 
-  async function activate() {
+  function activate() {
     DASH.active = true;
     if (!DASH.snapshot) {
       setStatus('aguardando o primeiro snapshot…');
       return;
     }
-    setStatus('carregando Plotly local…');
-    try {
-      await loadPlotly();
-      if (!DASH.active) return;
-      refresh();
-      // Se a janela mudou com a aba oculta, o Plotly guardou a largura antiga.
-      resizeVisible();
-    } catch (err) {
-      setStatus(`Plotly indisponível: ${err.message}`, 'err');
-      ['dashRanking', 'dashRadar', 'trendChart', 'trendCatChart']
-        .forEach((id) => drawEmpty(id, 'Plotly não carregou da cópia local.'));
-    }
-  }
-
-  function resizeVisible() {
-    if (!window.Plotly || !DASH.active) return;
-    requestAnimationFrame(() => {
-      document.querySelectorAll('#tab-dashboard .js-plotly-plot').forEach((el) => {
-        window.Plotly.Plots.resize(el);
-      });
-    });
+    refresh();
+    // A aba estava oculta: os contêineres podem ter mudado de largura.
+    resizeVisible();
   }
 
   /* ---------------- evolução (dados vêm do app.js) ---------------- */
@@ -385,12 +455,14 @@
   // (fim de semana e série mensal não são lacuna). Com null, o próprio
   // null quebra. Até `rebuiltUntil` a série é recálculo diário e sai
   // tracejada, com a ponte para a medição ao vivo.
-  function trendTraces(s, bucketSeconds) {
+  function trendLists(s, bucketSeconds) {
     const pts = (s.points || [])
-      .map((p) => ({ t: p.t, ms: Date.parse(p.t), v: p.v === null || p.v === undefined ? null : Number(p.v) }))
+      .map((p) => ({ t: p.t, ms: Date.parse(p.t), v: isNum(p.v) ? Number(p.v) : null }))
       .filter((p) => Number.isFinite(p.ms))
       .sort((a, b) => a.ms - b.ms);
-    if (!pts.length) return [];
+    const old = [];
+    const live = [];
+    if (!pts.length) return { old, live, isRebuilt: () => false };
     const hasNulls = pts.some((p) => p.v === null);
     const diffs = [];
     for (let i = 1; i < pts.length; i += 1) {
@@ -402,76 +474,107 @@
     const gapMs = hasNulls ? Infinity : Math.max(bucketSeconds ? bucketSeconds * 1800 : 0, median * 4);
     const rebuiltGap = Math.max(gapMs === Infinity ? 0 : gapMs, DAY_MS * 1.8);
     const rebuiltMs = s.rebuiltUntil ? Date.parse(s.rebuiltUntil) : NaN;
-    const isRebuilt = (p) => Number.isFinite(rebuiltMs) && p.ms <= rebuiltMs;
+    // Com a lista de dias da API só esses dias saem tracejados (buraco no
+    // meio da série ao vivo incluído); sem ela, vale tudo até rebuiltUntil.
+    const days = Array.isArray(s.rebuiltDays) ? new Set(s.rebuiltDays) : null;
+    const isRebuilt = (p) => (days
+      ? days.has(String(p.t).slice(0, 10))
+      : Number.isFinite(rebuiltMs) && p.ms <= rebuiltMs);
 
-    const old = [];
-    const live = [];
-    let prev = null;
-    for (const p of pts) {
-      const list = isRebuilt(p) ? old : live;
-      const gap = isRebuilt(p) ? rebuiltGap : gapMs;
-      if (prev && prev.v !== null && p.v !== null && list.length && p.ms - prev.ms > gap) {
-        list.push({ t: prev.t, v: null });
+    // Cada lista guarda só pontos vizinhos; salto entre eles vira null.
+    const st = { old: null, live: null };
+    const push = (list, key, i) => {
+      if (st[key] === i) return;
+      if (st[key] !== null && i !== st[key] + 1) list.push({ t: pts[i].t, ms: pts[i].ms, v: null });
+      list.push(pts[i]);
+      st[key] = i;
+    };
+    for (let i = 0; i < pts.length; i += 1) {
+      const p = pts[i];
+      const prev = i ? pts[i - 1] : null;
+      const rebuilt = isRebuilt(p);
+      // O trecho entre um ponto reconstruído e um ao vivo (nos dois sentidos)
+      // é tracejado e liga os dois.
+      if (prev && prev.v !== null && p.v !== null && isRebuilt(prev) !== rebuilt
+        && p.ms - prev.ms <= rebuiltGap) {
+        push(old, 'old', i - 1);
+        push(old, 'old', i);
       }
-      if (!isRebuilt(p) && prev && isRebuilt(prev) && p.ms - prev.ms <= rebuiltGap) old.push(p);
-      list.push(p);
-      prev = p;
+      const gap = rebuilt ? rebuiltGap : gapMs;
+      if (prev && prev.v !== null && p.v !== null && st[rebuilt ? 'old' : 'live'] === i - 1
+        && p.ms - prev.ms > gap) {
+        (rebuilt ? old : live).push({ t: prev.t, ms: prev.ms, v: null });
+        st[rebuilt ? 'old' : 'live'] = null;
+      }
+      push(rebuilt ? old : live, rebuilt ? 'old' : 'live', i);
     }
-    const name = dEsc(s.label);
-    const unit = s.unit && s.unit !== '0-100' ? ` ${dEsc(s.unit)}` : '';
-    const fmt = `%{y:.${s.decimals ?? 1}f}`;
-    const trace = (list, extra) => ({
-      x: list.map((p) => p.t),
-      y: list.map((p) => p.v),
-      type: 'scatter',
-      mode: modeFor(list.filter((p) => p.v !== null)),
-      name,
-      legendgroup: s.key,
-      connectgaps: false,
-      line: { color: s.color, width: 2.2 },
-      hovertemplate: `${fmt}${unit}<extra>${name}</extra>`,
-      ...extra,
-    });
-    const out = [];
-    if (old.length) {
-      out.push(trace(old, {
-        showlegend: false,
-        line: { color: s.color, width: 1.6, dash: 'dash' },
-        opacity: 0.8,
-        hovertemplate: `${fmt}${unit}<extra>${name} · recalculado</extra>`,
-      }));
-    }
-    if (live.length) out.push(trace(live, {}));
-    return out;
+    return { old, live, isRebuilt };
   }
+
+  function segmentsOf(list) {
+    const segs = [];
+    let cur = [];
+    for (const p of list) {
+      if (p.v === null) {
+        if (cur.length) segs.push(cur);
+        cur = [];
+      } else {
+        cur.push(p);
+      }
+    }
+    if (cur.length) segs.push(cur);
+    return segs;
+  }
+
+  // Ponto mais próximo de `ms` em lista ordenada por `ms`.
+  function nearest(arr, ms) {
+    let lo = 0;
+    let hi = arr.length - 1;
+    if (hi < 0) return null;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (arr[mid].ms < ms) lo = mid; else hi = mid;
+    }
+    return Math.abs(arr[lo].ms - ms) <= Math.abs(arr[hi].ms - ms) ? arr[lo] : arr[hi];
+  }
+
+  function fmtTick(ms, span) {
+    const d = new Date(ms);
+    if (span < 2 * DAY_MS) return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    if (span > 300 * DAY_MS) return d.toLocaleDateString('pt-BR', { month: '2-digit', year: '2-digit' });
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  }
+
+  const fmtTipDate = (ms) => new Date(ms).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
 
   // cfg: { series, bars, from, to, range, bucketSeconds, zoomToData,
   // showLegend, empty, yTitle, zeroLabel }. Barras vão no eixo da direita;
   // zeroLabel marca a linha de zero com um rótulo.
-  async function drawTrend(id, cfg) {
-    try {
-      await loadPlotly();
-    } catch (err) {
-      const el = d$(id);
-      if (el) el.innerHTML = `<p class="dash-error">Plotly não carregou da cópia local: ${dEsc(err.message)}</p>`;
-      return;
-    }
-    const traces = (cfg.series || []).flatMap((s) => trendTraces(s, cfg.bucketSeconds));
-    const bars = (cfg.bars || []).filter((b) => (b.points || []).length);
-    bars.forEach((b) => traces.push({
-      x: b.points.map((p) => p.t),
-      y: b.points.map((p) => p.v),
-      type: 'bar',
-      name: dEsc(b.label),
-      yaxis: 'y2',
-      marker: { color: 'rgba(45,212,167,.45)' },
-      hovertemplate: `%{y:+.2f}%<extra>${dEsc(b.label)}</extra>`,
-    }));
-    if (!traces.length) {
+  function drawTrend(id, cfg) {
+    const lists = (cfg.series || [])
+      .map((s) => ({ s, ...trendLists(s, cfg.bucketSeconds) }))
+      .filter((l) => l.old.length || l.live.length);
+    const bars = (cfg.bars || []).map((b) => ({
+      b,
+      pts: (b.points || [])
+        .map((p) => ({ ms: Date.parse(p.t), v: isNum(p.v) ? Number(p.v) : null }))
+        .filter((p) => Number.isFinite(p.ms) && p.v !== null)
+        .sort((a, c) => a.ms - c.ms),
+    })).filter((b) => b.pts.length);
+    if (!lists.length && !bars.length) {
       drawEmpty(id, cfg.empty || 'Ainda não há histórico para mostrar.');
       return;
     }
-    const stamps = traces.flatMap((t) => t.x.map((x) => Date.parse(x))).filter(Number.isFinite);
+    lists.forEach((l) => {
+      l.all = [...l.old, ...l.live].filter((p) => p.v !== null).sort((a, b) => a.ms - b.ms);
+    });
+
+    const stamps = [
+      ...lists.flatMap((l) => [...l.old, ...l.live].map((p) => p.ms)),
+      ...bars.flatMap((b) => b.pts.map((p) => p.ms)),
+    ];
     let x0 = Date.parse(cfg.from);
     let x1 = Date.parse(cfg.to);
     // O período pedido manda no eixo; só "Tudo" e o gráfico por produto
@@ -484,57 +587,162 @@
       x1 = Number.isFinite(x1) ? Math.min(x1, hi + pad) : hi + pad;
       if (x1 <= x0) { x0 = lo - pad; x1 = hi + pad; }
     }
-    const xaxis = { type: 'date', tickformat: xTickFormat(cfg.range), hoverformat: '%d/%m/%Y %H:%M' };
-    if (Number.isFinite(x0) && Number.isFinite(x1) && x1 > x0) {
-      xaxis.range = [new Date(x0).toISOString(), new Date(x1).toISOString()];
+    if (!(Number.isFinite(x0) && Number.isFinite(x1) && x1 > x0)) {
+      const lo = Math.min(...stamps);
+      const hi = Math.max(...stamps);
+      const pad = hi > lo ? (hi - lo) * 0.05 : 30 * 60000;
+      x0 = lo - pad;
+      x1 = hi + pad;
     }
-    const extra = {
-      showlegend: Boolean(cfg.showLegend),
-      xaxis,
-      yaxis: { title: { text: cfg.yTitle || '', font: { size: 10 } }, zerolinecolor: COLOR.zero },
-    };
-    if (bars.length) {
-      extra.margin = { l: 52, r: 52, t: 30, b: 38 };
-      extra.bargap = 0.55;
-      extra.yaxis2 = {
-        overlaying: 'y',
-        side: 'right',
-        showgrid: false,
-        zerolinecolor: COLOR.zero,
-        tickfont: { size: 10, color: '#64748b' },
-        title: { text: 'inflação do mês (%)', font: { size: 10 } },
-      };
-    }
-    if (cfg.zeroLabel) {
-      extra.shapes = [{
-        type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0, y1: 0,
-        line: { color: '#475569', width: 1, dash: 'dot' },
-      }];
-      extra.annotations = [{
-        xref: 'paper', x: 0.005, xanchor: 'left', y: 0, yref: 'y', yanchor: 'bottom',
-        text: dEsc(cfg.zeroLabel), showarrow: false, font: { size: 10, color: '#64748b' },
-      }];
-    }
-    if (!cfg.showLegend) extra.margin = { ...(extra.margin || {}), l: 54, r: bars.length ? 52 : 18, t: 16, b: 38 };
-    draw(id, traces, extra);
-  }
+    const span = x1 - x0;
 
-  // Radar e ranking trocam entre lado a lado e empilhados em 1200 px: o
-  // Plotly precisa medir de novo a largura do cartão.
-  if (window.matchMedia) {
-    const wide = window.matchMedia('(min-width: 1200px)');
-    const onChange = () => resizeVisible();
-    if (wide.addEventListener) wide.addEventListener('change', onChange);
-    else if (wide.addListener) wide.addListener(onChange);
+    const label = `Séries históricas: ${[...lists.map((l) => l.s.label), ...bars.map((b) => b.b.label)].join(', ')}`;
+    paint(id, (el, w, h) => {
+      const P = {
+        l: 54, r: bars.length ? 52 : 18, t: cfg.showLegend ? 34 : 16, b: 38,
+      };
+      const iw = w - P.l - P.r;
+      const ih = h - P.t - P.b;
+      const x = (ms) => P.l + ((ms - x0) / span) * iw;
+
+      const lineVals = lists.flatMap((l) => l.all.map((p) => p.v));
+      if (cfg.zeroLabel) lineVals.push(0);
+      let vlo = lineVals.length ? Math.min(...lineVals) : 0;
+      let vhi = lineVals.length ? Math.max(...lineVals) : 1;
+      const padV = (vhi - vlo) * 0.08;
+      vlo -= padV;
+      vhi += padV;
+      if (cfg.zeroLabel && lineVals.length) { vlo = Math.min(vlo, 0); vhi = Math.max(vhi, 0); }
+      const ys = niceScale(vlo, vhi, Math.max(2, Math.floor(ih / 55)));
+      const y = (v) => P.t + ih - ((v - ys.lo) / (ys.hi - ys.lo)) * ih;
+      let y2 = null;
+      if (bars.length) {
+        const bv = bars.flatMap((b) => b.pts.map((p) => p.v));
+        const sc = niceScale(Math.min(0, ...bv), Math.max(0, ...bv), Math.max(2, Math.floor(ih / 55)));
+        y2 = { sc, f: (v) => P.t + ih - ((v - sc.lo) / (sc.hi - sc.lo)) * ih };
+      }
+
+      const clipId = `dashClip-${id}`;
+      let g = `<defs><clipPath id="${clipId}"><rect x="${P.l}" y="${P.t}" width="${iw}" height="${ih}"/></clipPath></defs>`;
+      ys.ticks.forEach((t) => {
+        g += `<line x1="${P.l}" y1="${f1(y(t))}" x2="${w - P.r}" y2="${f1(y(t))}" stroke="${t === 0 ? COLOR.zero : COLOR.grid}"/>`;
+        g += txt(P.l - 7, y(t) + 3.5, dNum(t, ys.dec), { anchor: 'end', mono: true });
+      });
+      if (y2) {
+        y2.sc.ticks.forEach((t) => g += txt(w - P.r + 7, y2.f(t) + 3.5, dNum(t, y2.sc.dec), { mono: true }));
+        g += txt(w - 12, P.t + ih / 2, 'inflação do mês (%)', { anchor: 'middle', rotate: 90 });
+      }
+      const nx = Math.max(2, Math.floor(iw / 90));
+      for (let i = 0; i <= nx; i += 1) {
+        const ms = x0 + (span * i) / nx;
+        g += txt(x(ms), P.t + ih + 15, fmtTick(ms, span), {
+          anchor: i === 0 ? 'start' : (i === nx ? 'end' : 'middle'), mono: true,
+        });
+      }
+      if (cfg.yTitle) g += txt(12, P.t + ih / 2, cfg.yTitle, { anchor: 'middle', rotate: -90 });
+
+      // barras (eixo da direita), atrás das linhas
+      let bw = 14;
+      if (bars.length) {
+        let gap = Infinity;
+        bars.forEach((b) => b.pts.forEach((p, i) => {
+          if (i) gap = Math.min(gap, x(p.ms) - x(b.pts[i - 1].ms));
+        }));
+        if (Number.isFinite(gap)) bw = clamp(gap * 0.55, 2, 40);
+      }
+      g += `<g clip-path="url(#${clipId})">`;
+      bars.forEach((b) => b.pts.forEach((p) => {
+        const top = y2.f(Math.max(0, p.v));
+        const bot = y2.f(Math.min(0, p.v));
+        g += `<rect x="${f1(x(p.ms) - bw / 2)}" y="${f1(top)}" width="${f1(bw)}" height="${f1(Math.max(1, bot - top))}" fill="rgba(45,212,167,.45)"/>`;
+      }));
+      if (cfg.zeroLabel && ys.lo <= 0 && ys.hi >= 0) {
+        g += `<line x1="${P.l}" y1="${f1(y(0))}" x2="${w - P.r}" y2="${f1(y(0))}" stroke="${COLOR.zero}" stroke-dasharray="2 3"/>`;
+      }
+      lists.forEach((l) => {
+        [[l.old, true], [l.live, false]].forEach(([list, dashed]) => {
+          if (!list.length) return;
+          const segs = segmentsOf(list);
+          const count = segs.reduce((n, sg) => n + sg.length, 0);
+          segs.forEach((sg) => {
+            if (sg.length > 1) {
+              const d = sg.map((p, i) => `${i ? 'L' : 'M'}${f1(x(p.ms))},${f1(y(p.v))}`).join('');
+              g += `<path d="${d}" fill="none" stroke="${dEsc(l.s.color)}" stroke-width="${dashed ? 1.6 : 2.2}" ` +
+                `stroke-linejoin="round" stroke-linecap="round"${dashed ? ' stroke-dasharray="5 4" opacity=".8"' : ''}/>`;
+            }
+            if (sg.length === 1 || count < 3) {
+              sg.forEach((p) => {
+                g += `<circle cx="${f1(x(p.ms))}" cy="${f1(y(p.v))}" r="3" fill="${dEsc(l.s.color)}"/>`;
+              });
+            }
+          });
+        });
+      });
+      g += '</g>';
+      if (cfg.zeroLabel && ys.lo <= 0 && ys.hi >= 0) {
+        g += txt(P.l + 4, y(0) - 4, cfg.zeroLabel);
+      }
+      if (cfg.showLegend) {
+        let lx = P.l;
+        [...lists.map((l) => [l.s.color, l.s.label]), ...bars.map((b) => ['rgba(45,212,167,.6)', b.b.label])]
+          .forEach(([c, name]) => {
+            g += `<rect x="${f1(lx)}" y="8" width="12" height="4" rx="2" fill="${dEsc(c)}"/>`;
+            g += txt(lx + 17, 13, name, { size: 10.5, fill: COLOR.txt });
+            lx += 17 + String(name).length * 6.2 + 16;
+          });
+      }
+      g += `<line class="dash-cross" x1="0" y1="${P.t}" x2="0" y2="${P.t + ih}" stroke="${COLOR.dim}" ` +
+        'stroke-dasharray="3 3" style="display:none"/><g class="dash-dots"></g>';
+      g += `<rect class="dash-overlay" x="${P.l}" y="${P.t}" width="${iw}" height="${ih}" fill="transparent" style="touch-action:pan-y"/>`;
+      el.innerHTML = svgDoc(w, h, label, g);
+
+      const svg = el.querySelector('svg');
+      const cross = svg.querySelector('.dash-cross');
+      const dots = svg.querySelector('.dash-dots');
+      const times = [...new Set(stamps)].sort((a, b) => a - b).map((ms) => ({ ms }));
+      const leave = () => {
+        cross.style.display = 'none';
+        dots.innerHTML = '';
+        hideTip(el);
+      };
+      svg.addEventListener('pointerleave', leave);
+      svg.addEventListener('pointermove', (ev) => {
+        const r = svg.getBoundingClientRect();
+        const mx = ev.clientX - r.left;
+        if (mx < P.l || mx > P.l + iw) { leave(); return; }
+        const snap = nearest(times, x0 + ((mx - P.l) / iw) * span);
+        if (!snap) { leave(); return; }
+        const rows = [];
+        let dotsHtml = '';
+        lists.forEach((l) => {
+          const p = nearest(l.all, snap.ms);
+          if (!p || Math.abs(x(p.ms) - x(snap.ms)) > 24) return;
+          const rebuilt = l.isRebuilt(p);
+          const unit = l.s.unit && l.s.unit !== '0-100' ? l.s.unit : '';
+          rows.push(tipRow(l.s.color, l.s.label, dNum(p.v, l.s.decimals ?? 1),
+            [unit, rebuilt ? 'recalculado' : ''].filter(Boolean).join(' · ')));
+          dotsHtml += `<circle cx="${f1(x(p.ms))}" cy="${f1(y(p.v))}" r="3.6" fill="${dEsc(l.s.color)}" stroke="#0b0f17" stroke-width="1.5"/>`;
+        });
+        bars.forEach((b) => {
+          const p = nearest(b.pts, snap.ms);
+          if (!p || Math.abs(x(p.ms) - x(snap.ms)) > Math.max(24, bw)) return;
+          rows.push(tipRow('rgba(45,212,167,.6)', b.b.label, dPct(p.v, 2)));
+        });
+        if (!rows.length) { leave(); return; }
+        const cx = x(snap.ms);
+        cross.setAttribute('x1', f1(cx));
+        cross.setAttribute('x2', f1(cx));
+        cross.style.display = '';
+        dots.innerHTML = dotsHtml;
+        showTip(el, `<div class="tip-head">${dEsc(fmtTipDate(snap.ms))}</div>${rows.join('')}`, ev);
+      });
+    });
   }
 
   function onSnapshot(snap) {
     const changed = !DASH.snapshot || DASH.snapshot.generated_at !== snap.generated_at;
     DASH.snapshot = snap;
-    if (changed && DASH.active) {
-      if (window.Plotly) refresh();
-      else activate();
-    }
+    if (changed && DASH.active) refresh();
   }
 
   function deactivate() {

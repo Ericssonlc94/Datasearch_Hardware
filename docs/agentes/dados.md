@@ -1343,3 +1343,51 @@ desligar as lojas nesse teste (ou num conftest).
 (a regra mudou de propósito; o teste novo `test_falha_total_fica_no_ciclo_e_vence_depois`
 o substitui). As outras 19 (api_security, backfill, queue_model, supply,
 ui_contract) estão fora destes arquivos. Pendentes: 103 passam.
+
+## T46 — aba Gráficos: Plotly trocado por SVG inline (11/11/2026): **feito**
+
+`app/static/dashboard.js` reescrito sem biblioteca: ranking (barras agrupadas,
+clique chama `selectCategory` → `dash:category`), radar e evolução
+(linhas com quebra por lacuna, tracejado do recalculado, barras do IPCA no
+eixo da direita, linha de zero). Hover com crosshair e tooltip (`.trend-tip`),
+refeito a cada mudança de tamanho (ResizeObserver), estado vazio em SVG,
+`role="img"` + `aria-label` + `<title>` no `<svg>` (o `role` do contêiner sai
+em tempo de execução). Removidos `loadPlotly`, `window.Plotly`, `PLOTLY_URL` e
+os textos "Plotly"; comentários do `app.js` ajustados. Consumidor vs Datacenter
+já era SVG (`lineChart`), sem mudança. Testes: `test_ui_contract.py` (dois
+testes de Plotly trocados por `test_dashboard_e_svg_inline_sem_plotly_nem_cdn`
+e a versão SVG do de lacuna/drill-down); suíte com lojas desligadas: 325
+passam, 20 falham (as mesmas de antes, fora desta tarefa).
+
+**Pedidos.** Plataforma: apagar `app/static/vendor/plotly-*` (4,4 MB) e o
+CSS/comentários "Plotly" em `styles.css`/`editorial.css`. QA: 9 testes de
+`test_ui_contract.py` apontam ids de HTML que não existem mais.
+
+## T47 — reconstrução de buracos entre ciclos ao vivo (11/11/2026): **feito**
+
+`history.record_reconstruction` agora cobre todo dia sem IPH ao vivo (não só
+antes do primeiro). Dia com pregão (algum de brent, copper, nvda, soxx, micron,
+remx, ptax, usd_twd, tsmc, taiwan_relative com ponto novo na data, lido do
+próprio history.db) é recalculado por `backfill.reconstruct_day`, com piso de
+60% na linha `coverage`; dia sem pregão repete o último valor de cada chave,
+sem recalcular. Sem dado de mercado no histórico, todo dia vale como pregão.
+Nunca toca ponto ao vivo; mesma versão do modelo não refaz. Novo
+`history.reconstructed_days(keys)` (a plataforma já o expõe como `rebuilt_days`).
+`dashboard.js`/`app.js`: só os dias da lista saem tracejados, com ponte nos dois
+sentidos e quebra na série ao vivo; aviso do gráfico reescrito. Testes: 3 novos
+em `test_backfill.py` no lugar do "só antes do primeiro ciclo". Suíte (lojas
+off): 327 passam, 20 falham (as de antes). Sem feriados: feriado com mercado
+fechado cai em "sem pregão" só se nenhum sinal tiver ponto na data.
+
+## T48 — gráfico de estimativa por produto cobre o mês de novo (11/11/2026): **feito, sem escrita no banco**
+
+Leitura: `reconstruction_model` = `MODEL_VERSION` atual (03404b5b3ac4), ou seja,
+os 31 pontos reconstruídos de `iph` e `cat.*` (06/10–09/11) **já são da conta
+atual**; não há o que regravar. O que escondia o mês era `currentPoints`
+(app.js), que cortava tudo antes de `model_since` (05/11 17:43), reconstruído
+incluído. Recuar `model_since` traria de volta os pontos **ao vivo** de
+03–05/11, da conta antiga; por isso não recuei. Mudança: `currentPoints` mantém
+pontos de dias em `rebuilt_days`. Backup: `data/backup-2026-11-11/history.db`
+(sqlite backup, 16.478 linhas). Buraco restante: 03/11–05/11 17:43 (só há ponto
+ao vivo da conta antiga; reconstruir esses dias exigiria tratar "ao vivo antigo"
+como ausente em `record_reconstruction`; não feito, aguarda decisão).
